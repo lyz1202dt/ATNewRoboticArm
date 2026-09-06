@@ -1,0 +1,24 @@
+# 设置最低版本要求
+cmake_minimum_required(VERSION 3.10)
+
+# 设置项目名称
+project(executer_test)
+
+# 使用 C++17
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# 添加源文件和头文件目录
+set(SOURCE_FILES
+    example.cpp    # 主程序文件
+)
+
+# 指定头文件目录
+include_directories(${CMAKE_SOURCE_DIR}/executer)  # 假设头文件在项目根目录
+
+# 线程支持（std::thread）
+find_package(Threads REQUIRED)
+
+# 创建可执行文件
+add_executable(executer_test ${SOURCE_FILES})
+target_link_libraries(executer_test PRIVATE Threads::Threads)
