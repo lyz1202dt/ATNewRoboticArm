@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(dog_controller)
+project(arm_controller)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -18,7 +18,11 @@ find_package(controller_interface REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
-find_package(robot_interfaces REQUIRED)
+find_package(pinocchio REQUIRED)
+find_package(kdl_parser REQUIRED)
+find_package(orocos_kdl REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(robot_msgs REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -34,25 +38,31 @@ endif()
 
 pluginlib_export_plugin_description_file(controller_interface plugin.xml)
 
-add_library(dog_controller SHARED
-  src/dog_controller.cpp
+add_library(arm_controller SHARED
+  controller/src/controller.cpp
+  lib/calculate/default_6d_arm.cpp
 )
 
-target_include_directories(dog_controller PUBLIC
+target_include_directories(arm_controller PUBLIC
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/calculate>
 $<INSTALL_INTERFACE:include>
 )
 
 ament_target_dependencies(
-  dog_controller
+  arm_controller
   rclcpp
   controller_interface
   pluginlib
   hardware_interface
-  robot_interfaces
+  robot_msgs
+  kdl_parser
+  orocos_kdl
 )
 
-install(TARGETS dog_controller
+target_link_libraries(arm_controller Eigen3::Eigen)
+
+install(TARGETS arm_controller
 LIBRARY DESTINATION lib)
 
 install(
@@ -60,7 +70,11 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
-install(DIRECTORY include/
+install(DIRECTORY controller/inc/
 DESTINATION include)
+
+install(DIRECTORY lib/calculate/
+  DESTINATION include/arm_controller
+  FILES_MATCHING PATTERN "*.hpp")
 
 ament_package()

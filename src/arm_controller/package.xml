@@ -14,7 +14,10 @@
   <depend>hardware_interface</depend>
   <depend>pluginlib</depend>
   <depend>rclcpp_lifecycle</depend>
-  <depend>robot_interfaces</depend>
+  <depend>eigen</depend>
+  <depend>robot_msgs</depend>
+  <depend>kdl_parser</depend>
+  <depend>orocos_kdl</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
