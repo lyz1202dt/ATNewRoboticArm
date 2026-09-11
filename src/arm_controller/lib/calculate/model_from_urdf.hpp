@@ -1,25 +1,27 @@
 #pragma once
 
 #include "modelbase.hpp"
-#include <kdl/chain.hpp>
-#include <kdl/chaindynparam.hpp>
-#include <kdl/chainfksolverpos_recursive.hpp>
-#include <kdl/chainiksolverpos_lma.hpp>
-#include <kdl/chainiksolvervel_pinv.hpp>
-#include <kdl/chainjnttojacdotsolver.hpp>
-#include <kdl/chainjnttojacsolver.hpp>
-#include <kdl/frames.hpp>
-#include <kdl/jacobian.hpp>
-#include <kdl/jntarray.hpp>
-#include <kdl/jntarrayvel.hpp>
+#include <pinocchio/algorithm/frames.hpp>
+#include <pinocchio/algorithm/jacobian.hpp>
+#include <pinocchio/algorithm/kinematics.hpp>
+#include <pinocchio/multibody/data.hpp>
+#include <pinocchio/multibody/model.hpp>
 
 class ModelFromURDF : public ModelBase{
 public:
-    ModelFromURDF();
+    explicit ModelFromURDF(const std::string& file_name,const std::string &end_link_name);
     int dof() const override;
     Eigen::Isometry3d forward_kinematics(const Eigen::VectorXd& q) const override;
     Eigen::MatrixXd geometric_jacobian(const Eigen::VectorXd& q) const override; 
     Eigen::VectorXd lower_jointLimit() const override; 
     Eigen::VectorXd upper_jointLimit() const override;
+
 private:
+    static pinocchio::Model load_model();
+    static std::string locate_urdf();
+    void check_vector_dimension(const Eigen::VectorXd& q) const;
+
+    pinocchio::Model model_;
+    pinocchio::Data data_;
+    pinocchio::FrameIndex end_effector_frame_id_{0};
 };

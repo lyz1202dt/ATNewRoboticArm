@@ -1,22 +1,40 @@
 #pragma once
 
-#include "ik_task.hpp"
+#include "modelbase.hpp"
+#include <Eigen/src/Core/Matrix.h>
+#include <memory>
+#include <vector>
 
 
-class TaskEvaluator {
+class TaskUnit {
 public:
-    explicit TaskEvaluator(const ModelBase& robot);
-    Eigen::VectorXd value(const Eigen::VectorXd& q, const Task& task) const;
-    Eigen::VectorXd error(const Eigen::VectorXd& q, const Task& task) const;
-    Eigen::MatrixXd jacobian(const Eigen::VectorXd& q, const Task& task) const;
+    enum TaskType { PositionX, PositionY, PositionZ, Roll, Pitch, YAW };
 
-private:
-    const ModelBase& robot_;
+    TaskType type;
+    double target{0.0};
+    double weight{1.0};
+    bool hard_constraint{false};
 };
 
-
-class IKProblem {
+class Task {
 public:
+    void add(const TaskUnit& task_unit);
+    void set(const std::vector<TaskUnit>& task_units);
+    void clear();
+    const std::vector<TaskUnit>& components() const;
+
+private:
+    std::vector<TaskUnit> task_units_;
+};
+
+struct IKResult {
+    bool success = false;
+    Eigen::VectorXd q;
+    double error_norm = 0.0;
+    int iterations    = 0;
+};
+
+struct IKProblem {
     Eigen::VectorXd initial_q;
     Task task;
 
@@ -27,9 +45,13 @@ public:
 
 class IKSolver {
 public:
-    explicit IKSolver(const ModelBase& robot);
-    ~IKSolver()  = default;
+    explicit IKSolver(ModelBase* robot);
+    ~IKSolver() = default;
     IKResult solve(const IKProblem& problem);
+
+    Eigen::MatrixXd jacobian(const Eigen::VectorXd& q, const Task& task);
+
 private:
-    const ModelBase& robot_;
+    ModelBase* robot_;
+    Eigen::VectorXd yq;
 };

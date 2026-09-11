@@ -23,6 +23,8 @@ find_package(kdl_parser REQUIRED)
 find_package(orocos_kdl REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(robot_msgs REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(arm_model REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -40,7 +42,7 @@ pluginlib_export_plugin_description_file(controller_interface plugin.xml)
 
 add_library(arm_controller SHARED
   controller/src/controller.cpp
-  lib/calculate/default_6d_arm.cpp
+  lib/calculate/model_from_urdf.cpp
 )
 
 target_include_directories(arm_controller PUBLIC
@@ -56,11 +58,15 @@ ament_target_dependencies(
   pluginlib
   hardware_interface
   robot_msgs
+  ament_index_cpp
   kdl_parser
   orocos_kdl
 )
 
-target_link_libraries(arm_controller Eigen3::Eigen)
+target_link_libraries(arm_controller
+  Eigen3::Eigen
+  pinocchio::pinocchio
+)
 
 install(TARGETS arm_controller
 LIBRARY DESTINATION lib)

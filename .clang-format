@@ -45,6 +45,8 @@ AllowAllParametersOfDeclarationOnNextLine: true
 AllowShortBlocksOnASingleLine: Empty
 AllowShortCaseLabelsOnASingleLine: true
 
+AllowShortFunctionsOnASingleLine: None
+
 IndentPPDirectives: AfterHash
 PPIndentWidth: 1
 
