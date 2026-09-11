@@ -8,7 +8,7 @@
 
 class TaskUnit {
 public:
-    enum TaskType { PositionX, PositionY, PositionZ, Roll, Pitch, YAW };
+    enum TaskType { PositionX=0, PositionY=1, PositionZ=2, YAW=3, Pitch=4, ROLL=5 };
 
     TaskType type;
     double target{0.0};

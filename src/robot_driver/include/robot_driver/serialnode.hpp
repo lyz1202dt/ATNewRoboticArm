@@ -5,7 +5,7 @@
 #include <thread>
 #include <rclcpp/rclcpp.hpp>
 #include <cdc_trans.hpp>
-#include <robot_interfaces/msg/arm.hpp>
+#include <robot_msgs/msg/arm.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <data_pack.h>
 
@@ -18,14 +18,14 @@ public:
 
 private:
     bool exit_thread;
-    void legsSubscribCb(const robot_interfaces::msg::Arm &msg);
+    void legsSubscribCb(const robot_msgs::msg::Arm &msg);
     void publishLegState(const ArmState_t *arm_state);
 
     std::unique_ptr<CDCTrans> cdc_trans;
     std::unique_ptr<std::thread> usb_event_handle_thread;
     
-    rclcpp::Publisher<robot_interfaces::msg::Arm>::SharedPtr joint_publisher;
-    rclcpp::Subscription<robot_interfaces::msg::Arm>::SharedPtr joint_subscriber;
+    rclcpp::Publisher<robot_msgs::msg::Arm>::SharedPtr joint_publisher;
+    rclcpp::Subscription<robot_msgs::msg::Arm>::SharedPtr joint_subscriber;
     OnSetParametersCallbackHandle::SharedPtr param_server_handle;
 
     ArmTarget_t arm_target;

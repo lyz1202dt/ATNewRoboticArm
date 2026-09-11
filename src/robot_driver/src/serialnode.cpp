@@ -1,6 +1,6 @@
 // 负责上位机和下位机双向数据通信
 
-#include "robot_interfaces/msg/arm.hpp"                      // 机械臂数据结构
+#include "robot_msgs/msg/arm.hpp"                      // 机械臂数据结构
 #include "sensor_msgs/msg/joint_state.hpp"                   // 关节状态
 #include <chrono>
 #include <rclcpp/logging.hpp>
@@ -36,9 +36,9 @@ SerialNode::SerialNode()
 
     // 先创建 publisher/subscriber，确保回调中 publish 时 publisher 已就绪
     // joint_publisher = this->create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);
-    joint_publisher = this->create_publisher<robot_interfaces::msg::Arm>("myjoints_state", 10);
+    joint_publisher = this->create_publisher<robot_msgs::msg::Arm>("myjoints_state", 10);
 
-    joint_subscriber = this->create_subscription<robot_interfaces::msg::Arm>(
+    joint_subscriber = this->create_subscription<robot_msgs::msg::Arm>(
         "myjoints_target", 10, std::bind(&SerialNode::legsSubscribCb, this, std::placeholders::_1));
 
 
@@ -78,7 +78,7 @@ SerialNode::~SerialNode() {
 }
 
 void SerialNode::publishLegState(const ArmState_t* arm_state) {
-    robot_interfaces::msg::Arm msg;
+    robot_msgs::msg::Arm msg;
     for (int i = 0; i < 6; i++) {
         msg.motor[i].rad    = arm_state->joints[i].rad;
         msg.motor[i].omega  = arm_state->joints[i].omega;
@@ -94,7 +94,7 @@ void SerialNode::publishLegState(const ArmState_t* arm_state) {
     }
 }
 
-void SerialNode::legsSubscribCb(const robot_interfaces::msg::Arm& msg) {
+void SerialNode::legsSubscribCb(const robot_msgs::msg::Arm& msg) {
     for (int i = 0; i < 6; i++) {
         arm_target.joints[i].rad    = msg.motor[i].rad;
         arm_target.joints[i].omega  = msg.motor[i].omega;

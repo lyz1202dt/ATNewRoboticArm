@@ -22,6 +22,7 @@ find_package(pinocchio REQUIRED)
 find_package(kdl_parser REQUIRED)
 find_package(orocos_kdl REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(OsqpEigen REQUIRED)
 find_package(robot_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(arm_model REQUIRED)
@@ -65,6 +66,7 @@ ament_target_dependencies(
 
 target_link_libraries(arm_controller
   Eigen3::Eigen
+  OsqpEigen::OsqpEigen
   pinocchio::pinocchio
 )
 
