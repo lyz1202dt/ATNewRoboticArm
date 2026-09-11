@@ -1,19 +1,25 @@
 #pragma once
 
 #include "modelbase.hpp"
-#include <Eigen/src/Core/Matrix.h>
+#include <Eigen/Dense>
 #include <memory>
 #include <vector>
 
 
 class TaskUnit {
 public:
-    enum TaskType { PositionX=0, PositionY=1, PositionZ=2, YAW=3, Pitch=4, ROLL=5 };
+    // AxisDot constrains the dot product between a tool-frame axis and a
+    // world-frame reference axis. Its target is a scalar in [-1, 1].
+    enum TaskType { PositionX = 0, PositionY = 1, PositionZ = 2, AxisDot = 3 };
 
     TaskType type;
     double target{0.0};
     double weight{1.0};
-    bool hard_constraint{false};
+
+    // These fields are used only when type == AxisDot. They do not need to
+    // be unit length; the solver normalizes them before evaluating the task.
+    Eigen::Vector3d tool_axis{Eigen::Vector3d::UnitZ()};
+    Eigen::Vector3d reference_axis{Eigen::Vector3d::UnitZ()};
 };
 
 class Task {
@@ -52,6 +58,8 @@ public:
     Eigen::MatrixXd jacobian(const Eigen::VectorXd& q, const Task& task);
 
 private:
+    Eigen::Vector3d normalized_or_zero(const Eigen::Vector3d& axis) const;
+
     ModelBase* robot_;
     Eigen::VectorXd yq;
 };
