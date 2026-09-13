@@ -1,6 +1,5 @@
 #include "model_from_urdf.hpp"
 
-#include <ament_index_cpp/get_package_share_directory.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 
 #include <filesystem>
@@ -15,6 +14,7 @@ ModelFromURDF::ModelFromURDF(const std::string& file_name, const std::string& en
     }
 
     pinocchio::urdf::buildModel(urdf_file.string(), model_);
+    data_ = pinocchio::Data(model_);
     if (!model_.existFrame(end_link_name)) {
         throw std::runtime_error("The URDF model does not contain the end-effector frame: " + std::string(end_link_name));
     }
@@ -45,6 +45,24 @@ Eigen::MatrixXd ModelFromURDF::geometric_jacobian(const Eigen::VectorXd& q) cons
     return jacobian;
 }
 
+Eigen::VectorXd ModelFromURDF::inverse_dynamic(Eigen::VectorXd q,
+                                               Eigen::VectorXd dq,
+                                               Eigen::VectorXd ddq) {
+    check_vector_dimension(q);
+    if (dq.size() != model_.nv) {
+        std::ostringstream message;
+        message << "Invalid velocity size: expected " << model_.nv << ", got " << dq.size();
+        throw std::invalid_argument(message.str());
+    }
+    if (ddq.size() != model_.nv) {
+        std::ostringstream message;
+        message << "Invalid acceleration size: expected " << model_.nv << ", got " << ddq.size();
+        throw std::invalid_argument(message.str());
+    }
+
+    return pinocchio::rnea(model_, data_, q, dq, ddq);
+}
+
 Eigen::VectorXd ModelFromURDF::lower_jointLimit() const {
     return model_.lowerPositionLimit;
 }
@@ -52,13 +70,6 @@ Eigen::VectorXd ModelFromURDF::lower_jointLimit() const {
 Eigen::VectorXd ModelFromURDF::upper_jointLimit() const {
     return model_.upperPositionLimit;
 }
-
-pinocchio::Model ModelFromURDF::load_model() {
-    pinocchio::Model model;
-    pinocchio::urdf::buildModel(locate_urdf(), model);
-    return model;
-}
-
 
 void ModelFromURDF::check_vector_dimension(const Eigen::VectorXd& q) const {
     if (q.size() != model_.nq) {

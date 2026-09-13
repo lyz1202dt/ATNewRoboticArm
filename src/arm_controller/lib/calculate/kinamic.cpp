@@ -6,22 +6,6 @@
 #include <algorithm>
 #include <limits>
 
-void Task::add(const TaskUnit& task_unit) {
-    task_units_.push_back(task_unit);
-}
-
-void Task::set(const std::vector<TaskUnit>& task_units) {
-    task_units_ = task_units;
-}
-
-void Task::clear() {
-    task_units_.clear();
-}
-
-
-const std::vector<TaskUnit>& Task::components() const {
-    return task_units_;
-}
 
 IKSolver::IKSolver(ModelBase* robot) {
     robot_ = robot;
@@ -36,10 +20,10 @@ Eigen::Vector3d IKSolver::normalized_or_zero(const Eigen::Vector3d& axis) const 
     return axis / norm;
 }
 
-Eigen::MatrixXd IKSolver::jacobian(const Eigen::VectorXd& q, const Task& task) {
+Eigen::MatrixXd IKSolver::jacobian(const Eigen::VectorXd& q, const std::vector<TaskUnit> &task) {
     const Eigen::MatrixXd geometric_jacobian = robot_->geometric_jacobian(q);
     const Eigen::Matrix3d rotation           = robot_->forward_kinematics(q).rotation();
-    const auto& components                   = task.components();
+    const auto& components                   = task;
 
     Eigen::MatrixXd task_jacobian(static_cast<Eigen::Index>(components.size()), geometric_jacobian.cols());
     for (Eigen::Index i = 0; i < task_jacobian.rows(); ++i) {
@@ -146,7 +130,7 @@ IKResult IKSolver::solve(const IKProblem& problem) {
         //   H = 2 * (Jw^T Jw + lambda^2 I),  g = -2 * Jw^T ew,
         // i.e. min ||Jw dq - ew||^2 + lambda^2 ||dq||^2.
         const Eigen::MatrixXd H_dense       = 2.0 * (Jw.transpose() * Jw + kDamping * kDamping * Eigen::MatrixXd::Identity(n, n));
-        const Eigen::VectorXd gradient      = -2.0 * Jw.transpose() * ew;
+        Eigen::VectorXd gradient            = -2.0 * Jw.transpose() * ew;
         const Eigen::SparseMatrix<double> H = H_dense.sparseView();
 
         // Box constraints on dq: lower - q <= dq <= upper - q, tightened by step limits.

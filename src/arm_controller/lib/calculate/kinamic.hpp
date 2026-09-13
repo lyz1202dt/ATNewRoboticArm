@@ -22,17 +22,6 @@ public:
     Eigen::Vector3d reference_axis{Eigen::Vector3d::UnitZ()};
 };
 
-class Task {
-public:
-    void add(const TaskUnit& task_unit);
-    void set(const std::vector<TaskUnit>& task_units);
-    void clear();
-    const std::vector<TaskUnit>& components() const;
-
-private:
-    std::vector<TaskUnit> task_units_;
-};
-
 struct IKResult {
     bool success = false;
     Eigen::VectorXd q;
@@ -42,7 +31,7 @@ struct IKResult {
 
 struct IKProblem {
     Eigen::VectorXd initial_q;
-    Task task;
+    std::vector<TaskUnit> task;
 
     bool enable_joint_limits = true;
     bool enable_step_limits  = false;
@@ -52,14 +41,21 @@ struct IKProblem {
 class IKSolver {
 public:
     explicit IKSolver(ModelBase* robot);
-    ~IKSolver() = default;
     IKResult solve(const IKProblem& problem);
-
-    Eigen::MatrixXd jacobian(const Eigen::VectorXd& q, const Task& task);
-
+    Eigen::MatrixXd jacobian(const Eigen::VectorXd& q, const std::vector<TaskUnit> &task);
 private:
     Eigen::Vector3d normalized_or_zero(const Eigen::Vector3d& axis) const;
 
     ModelBase* robot_;
     Eigen::VectorXd yq;
+};
+
+class FKSolver {
+public:
+    explicit FKSolver(ModelBase* robot);
+    IKResult forward_kinamic(const IKProblem& problem);
+    Eigen::Vector3d normalized_or_zero(const Eigen::Vector3d& axis) const;
+private:
+    std::vector<TaskUnit::TaskType> task_type;
+    ModelBase* robot_;
 };
