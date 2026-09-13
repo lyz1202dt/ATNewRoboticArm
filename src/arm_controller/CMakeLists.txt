@@ -22,7 +22,6 @@ find_package(pinocchio REQUIRED)
 find_package(kdl_parser REQUIRED)
 find_package(orocos_kdl REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(OsqpEigen REQUIRED)
 find_package(robot_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(arm_model REQUIRED)
@@ -44,7 +43,7 @@ pluginlib_export_plugin_description_file(controller_interface plugin.xml)
 add_library(arm_controller SHARED
   controller/src/controller.cpp
   lib/calculate/kinamic.cpp
-  lib/calculate/armsolve.cpp
+  lib/calculate/solve.cpp
   lib/calculate/model_from_urdf.cpp
 )
 
@@ -68,7 +67,6 @@ ament_target_dependencies(
 
 target_link_libraries(arm_controller
   Eigen3::Eigen
-  OsqpEigen::OsqpEigen
   pinocchio::pinocchio
 )
 

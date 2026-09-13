@@ -1,9 +1,31 @@
 #include "kinamic.hpp"
 
-#include <Eigen/Sparse>
-#include <OsqpEigen/OsqpEigen.h>
-#include <algorithm>
+#include <cmath>
 #include <stdexcept>
+
+namespace {
+
+constexpr Eigen::Index kCartesianDimension = 6;
+constexpr int kMaxIterations                = 200;
+constexpr double kTolerance                 = 1e-6;
+constexpr double kDamping                   = 1e-4;
+constexpr double kMaxJointStep              = 0.1;
+constexpr double kPi                         = 3.14159265358979323846;
+
+Eigen::VectorXd pose_to_cartesian(const Eigen::Isometry3d& pose) {
+    const Eigen::Vector3d yaw_pitch_roll = pose.rotation().eulerAngles(2, 1, 0);
+
+    Eigen::VectorXd cartesian(kCartesianDimension);
+    cartesian << pose.translation().x(), pose.translation().y(), pose.translation().z(),
+        yaw_pitch_roll[2], yaw_pitch_roll[1], yaw_pitch_roll[0];
+    return cartesian;
+}
+
+double angle_error(double target, double current) {
+    return std::remainder(target - current, 2.0 * kPi);
+}
+
+}  // namespace
 
 IKSolver::IKSolver(ModelBase* robot, TaskMapping* task_mapping)
     : robot_(robot), task_mapping_(task_mapping) {
@@ -15,167 +37,87 @@ IKSolver::IKSolver(ModelBase* robot, TaskMapping* task_mapping)
     }
 }
 
-Eigen::MatrixXd IKSolver::jacobian(const Eigen::VectorXd& q) {
-    const Eigen::MatrixXd geometric_jacobian = robot_->geometric_jacobian(q);
-    Eigen::MatrixXd task_jacobian;
-
-    if (!task_mapping_->jacobian_map(q, geometric_jacobian, &task_jacobian)) {
+Eigen::MatrixXd IKSolver::jacobian(const Eigen::VectorXd& joint_pos) const {
+    const Eigen::MatrixXd geometric_jacobian = robot_->geometric_jacobian(joint_pos);
+    if (geometric_jacobian.rows() != 6 || geometric_jacobian.cols() != robot_->dof()
+        || !geometric_jacobian.allFinite()) {
         return {};
     }
 
-    if (task_jacobian.cols() != geometric_jacobian.cols() || !task_jacobian.allFinite()) {
+    Eigen::MatrixXd task_jacobian;
+    if (!task_mapping_->jacobian_map(joint_pos, geometric_jacobian, &task_jacobian)
+        || task_jacobian.cols() != geometric_jacobian.cols() || !task_jacobian.allFinite()) {
         return {};
     }
 
     return task_jacobian;
 }
 
-IKResult IKSolver::solve(const IKProblem& problem) {
-    IKResult result;
+Eigen::VectorXd IKSolver::cartesian_position(const Eigen::VectorXd& joint_pos) const {
+    return pose_to_cartesian(robot_->forward_kinematics(joint_pos));
+}
 
-    const std::vector<TaskUnit>& components = problem.task;
-    const int m = static_cast<int>(components.size());
-    const int n = robot_->dof();
-
-    if (m <= 0 || problem.initial_q.size() != n) {
-        return result;
+bool IKSolver::solve(const Eigen::VectorXd &cart_pos,Eigen::VectorXd &joint_pos) {
+    if (problem.size() != kCartesianDimension || !problem.allFinite()) {
+        return false;
     }
 
-    // Joint limits.
+    const Eigen::VectorXd target = problem;
+    const int joint_count = robot_->dof();
+    if (joint_count <= 0) {
+        return false;
+    }
+
     const Eigen::VectorXd lower = robot_->lower_jointLimit();
     const Eigen::VectorXd upper = robot_->upper_jointLimit();
-    const bool use_joint_limits = problem.enable_joint_limits && lower.size() == n && upper.size() == n;
+    const bool use_joint_limits = lower.size() == joint_count && upper.size() == joint_count
+        && lower.allFinite() && upper.allFinite();
 
-    // Per-joint step limits (a single scalar is applied to every joint).
-    const bool step_per_joint = problem.enable_step_limits && problem.max_step.size() == n;
-    const bool step_scalar    = problem.enable_step_limits && problem.max_step.size() == 1;
-
-    Eigen::VectorXd q = problem.initial_q;
+    Eigen::VectorXd joint_pos = Eigen::VectorXd::Zero(joint_count);
     if (use_joint_limits) {
-        q = q.cwiseMax(lower).cwiseMin(upper);
+        joint_pos = joint_pos.cwiseMax(lower).cwiseMin(upper);
     }
 
-    Eigen::VectorXd target(m);
-    Eigen::VectorXd weights(m);
-    for (int i = 0; i < m; ++i) {
-        target[i]  = components[i].target;
-        weights[i] = components[i].weight;
+    for (int iteration = 0; iteration < kMaxIterations; ++iteration) {
+        const Eigen::VectorXd current = cartesian_position(joint_pos);
+        Eigen::VectorXd error        = target - current;
+        for (Eigen::Index i = 3; i < kCartesianDimension; ++i) {
+            error[i] = angle_error(target[i], current[i]);
+        }
+
+        if (!error.allFinite()) {
+            return false;
+        }
+        if (error.norm() < kTolerance) {
+            problem = joint_pos;
+            return true;
+        }
+
+        const Eigen::MatrixXd task_jacobian = jacobian(joint_pos);
+        if (task_jacobian.rows() != problem.size() || task_jacobian.cols() != joint_count) {
+            return false;
+        }
+
+        const Eigen::MatrixXd hessian = task_jacobian.transpose() * task_jacobian
+            + kDamping * kDamping * Eigen::MatrixXd::Identity(joint_count, joint_count);
+        const Eigen::VectorXd gradient = task_jacobian.transpose() * error;
+        Eigen::VectorXd joint_step      = hessian.ldlt().solve(gradient);
+        if (!joint_step.allFinite()) {
+            return false;
+        }
+
+        joint_step = joint_step.cwiseMax(-kMaxJointStep).cwiseMin(kMaxJointStep);
+        if (use_joint_limits) {
+            joint_step = joint_step.cwiseMax(lower - joint_pos).cwiseMin(upper - joint_pos);
+        }
+        joint_pos += joint_step;
     }
 
-    auto compute_error = [&](const Eigen::VectorXd& qq, Eigen::VectorXd& error) {
-        const Eigen::Isometry3d pose = robot_->forward_kinematics(qq);
-        error.resize(m);
-        for (int i = 0; i < m; ++i) {
-            const TaskUnit& component = components[static_cast<std::size_t>(i)];
-            double current = 0.0;
-            switch (component.type) {
-            case TaskUnit::PositionX:
-            case TaskUnit::PositionY:
-            case TaskUnit::PositionZ:
-                current = pose.translation()[static_cast<Eigen::Index>(component.type)];
-                break;
-            case TaskUnit::AxisXX:
-            case TaskUnit::AxisYY:
-            case TaskUnit::AxisZZ: {
-                constexpr double kAxisEpsilon = 1e-12;
-                const Eigen::Index axis_index =
-                    static_cast<Eigen::Index>(component.type) - TaskUnit::AxisXX;
-                const double reference_norm = component.reference_axis.norm();
-                if (reference_norm <= kAxisEpsilon) {
-                    current = 0.0;
-                    break;
-                }
-                current = component.reference_axis.normalized().dot(pose.rotation().col(axis_index));
-                break;
-            }
-            default: return false;
-            }
-            error[i] = target[i] - current;
-        }
-        return error.allFinite();
-    };
-
-    constexpr int kMaxIterations = 200;
-    constexpr double kTolerance  = 1e-6;
-    constexpr double kDamping    = 1e-3;
-
-    // A = I: the joint-increment box constraints are decoupled per joint.
-    Eigen::SparseMatrix<double> constraint_matrix(n, n);
-    constraint_matrix.setIdentity();
-
-    Eigen::VectorXd error;
-    for (int iter = 0; iter < kMaxIterations; ++iter) {
-        result.iterations = iter + 1;
-
-        if (!compute_error(q, error)) {
-            return result;
-        }
-        const double error_norm = error.norm();
-        result.error_norm       = error_norm;
-        if (error_norm < kTolerance) {
-            result.success = true;
-            result.q       = q;
-            return result;
-        }
-
-        // Weighted task Jacobian and residual.
-        const Eigen::MatrixXd J = jacobian(q);
-        if (J.rows() != m || J.cols() != n) {
-            return result;
-        }
-        const Eigen::MatrixXd Jw = weights.asDiagonal() * J;
-        const Eigen::VectorXd ew = weights.cwiseProduct(error);
-
-        // QP cost: 0.5 * dq^T H dq + g^T dq, with
-        //   H = 2 * (Jw^T Jw + lambda^2 I),  g = -2 * Jw^T ew,
-        // i.e. min ||Jw dq - ew||^2 + lambda^2 ||dq||^2.
-        const Eigen::MatrixXd H_dense       = 2.0 * (Jw.transpose() * Jw + kDamping * kDamping * Eigen::MatrixXd::Identity(n, n));
-        Eigen::VectorXd gradient            = -2.0 * Jw.transpose() * ew;
-        const Eigen::SparseMatrix<double> H = H_dense.sparseView();
-
-        // Box constraints on dq: lower - q <= dq <= upper - q, tightened by step limits.
-        Eigen::VectorXd lower_bound(n);
-        Eigen::VectorXd upper_bound(n);
-        for (int j = 0; j < n; ++j) {
-            double lo = -OsqpEigen::INFTY;
-            double hi = OsqpEigen::INFTY;
-            if (use_joint_limits) {
-                lo = lower[j] - q[j];
-                hi = upper[j] - q[j];
-            }
-            if (step_per_joint) {
-                lo = std::max(lo, -problem.max_step[j]);
-                hi = std::min(hi, problem.max_step[j]);
-            } else if (step_scalar) {
-                lo = std::max(lo, -problem.max_step[0]);
-                hi = std::min(hi, problem.max_step[0]);
-            }
-            lower_bound[j] = lo;
-            upper_bound[j] = hi;
-        }
-
-        OsqpEigen::Solver solver;
-        solver.settings()->setVerbosity(false);
-        solver.data()->setNumberOfVariables(n);
-        solver.data()->setNumberOfConstraints(n);
-        if (!solver.data()->setHessianMatrix(H) || !solver.data()->setGradient(gradient)
-            || !solver.data()->setLinearConstraintsMatrix(constraint_matrix) || !solver.data()->setLowerBound(lower_bound)
-            || !solver.data()->setUpperBound(upper_bound) || !solver.initSolver()) {
-            return result;
-        }
-        if (solver.solveProblem() != OsqpEigen::ErrorExitFlag::NoError) {
-            return result;
-        }
-
-        const Eigen::VectorXd dq = solver.getSolution();
-        q += dq;
+    problem = joint_pos;
+    const Eigen::VectorXd current = cartesian_position(joint_pos);
+    Eigen::VectorXd residual      = target - current;
+    for (Eigen::Index i = 3; i < kCartesianDimension; ++i) {
+        residual[i] = angle_error(target[i], current[i]);
     }
-
-    if (!compute_error(q, error)) {
-        return result;
-    }
-    result.q          = q;
-    result.error_norm = error.norm();
-    result.success    = result.error_norm < kTolerance;
-    return result;
+    return residual.norm() < kTolerance;
 }
