@@ -42,15 +42,19 @@ pluginlib_export_plugin_description_file(controller_interface plugin.xml)
 
 add_library(arm_controller SHARED
   controller/src/controller.cpp
+  arm/arm_fsm.cpp
+  arm/default6dof_task.cpp
+  arm/model_from_urdf.cpp
+  lib/calculate/arm.cpp
   lib/calculate/kinamic.cpp
-  lib/calculate/solve.cpp
-  lib/calculate/model_from_urdf.cpp
+  lib/calculate/trajectory.cpp
 )
 
 target_include_directories(arm_controller PUBLIC
-$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/calculate>
-$<INSTALL_INTERFACE:include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/arm>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/calculate>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/fsm>
+  $<INSTALL_INTERFACE:include>
 )
 
 ament_target_dependencies(
@@ -79,9 +83,17 @@ install(
 )
 
 install(DIRECTORY controller/inc/
-DESTINATION include)
+  DESTINATION include)
+
+install(DIRECTORY arm/
+  DESTINATION include/arm_controller
+  FILES_MATCHING PATTERN "*.hpp")
 
 install(DIRECTORY lib/calculate/
+  DESTINATION include/arm_controller
+  FILES_MATCHING PATTERN "*.hpp")
+
+install(DIRECTORY lib/fsm/
   DESTINATION include/arm_controller
   FILES_MATCHING PATTERN "*.hpp")
 
