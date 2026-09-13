@@ -9,11 +9,11 @@ class IKSolver {
 public:
     IKSolver(ModelBase* robot, TaskMapping* task_mapping);
 
-    bool solve(const Eigen::VectorXd &cart_pos,Eigen::VectorXd &joint_pos);
+    bool solve(const Eigen::VectorXd& target, Eigen::VectorXd& joint_pos);
 
-    Eigen::MatrixXd jacobian(const Eigen::VectorXd& joint_pos) const;
+    Eigen::MatrixXd jacobian(const Eigen::VectorXd& joint_pos);
 
-    Eigen::VectorXd cartesian_position(const Eigen::VectorXd& joint_pos) const;
+    Eigen::VectorXd task_position(const Eigen::VectorXd& joint_pos);
 
 private:
     ModelBase* robot_;
