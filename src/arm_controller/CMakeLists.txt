@@ -43,7 +43,7 @@ pluginlib_export_plugin_description_file(controller_interface plugin.xml)
 
 add_library(arm_controller SHARED
   controller/src/controller.cpp
-  lib/calculate/ik_solve.cpp
+  lib/calculate/kinamic.cpp
   lib/calculate/armsolve.cpp
   lib/calculate/model_from_urdf.cpp
 )

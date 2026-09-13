@@ -1,46 +1,30 @@
-#include "ik_solve.hpp"
+#include "kinamic.hpp"
 
-#include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <OsqpEigen/OsqpEigen.h>
 #include <algorithm>
-#include <limits>
+#include <stdexcept>
 
-
-IKSolver::IKSolver(ModelBase* robot) {
-    robot_ = robot;
-}
-
-Eigen::Vector3d IKSolver::normalized_or_zero(const Eigen::Vector3d& axis) const {
-    constexpr double kAxisEpsilon = 1e-12;
-    const double norm             = axis.norm();
-    if (norm <= kAxisEpsilon) {
-        return Eigen::Vector3d::Zero();
+IKSolver::IKSolver(ModelBase* robot, TaskMapping* task_mapping)
+    : robot_(robot), task_mapping_(task_mapping) {
+    if (robot_ == nullptr) {
+        throw std::invalid_argument("IKSolver requires a model");
     }
-    return axis / norm;
+    if (task_mapping_ == nullptr) {
+        throw std::invalid_argument("IKSolver requires a TaskMapping");
+    }
 }
 
-Eigen::MatrixXd IKSolver::jacobian(const Eigen::VectorXd& q, const std::vector<TaskUnit> &task) {
+Eigen::MatrixXd IKSolver::jacobian(const Eigen::VectorXd& q) {
     const Eigen::MatrixXd geometric_jacobian = robot_->geometric_jacobian(q);
-    const Eigen::Matrix3d rotation           = robot_->forward_kinematics(q).rotation();
-    const auto& components                   = task;
+    Eigen::MatrixXd task_jacobian;
 
-    Eigen::MatrixXd task_jacobian(static_cast<Eigen::Index>(components.size()), geometric_jacobian.cols());
-    for (Eigen::Index i = 0; i < task_jacobian.rows(); ++i) {
-        const TaskUnit& component = components[static_cast<std::size_t>(i)];
-        switch (component.type) {
-        case TaskUnit::PositionX:
-        case TaskUnit::PositionY:
-        case TaskUnit::PositionZ: task_jacobian.row(i) = geometric_jacobian.row(static_cast<Eigen::Index>(component.type)); break;
-        case TaskUnit::AxisDot: {
-            const Eigen::Vector3d tool_axis       = normalized_or_zero(component.tool_axis);
-            const Eigen::Vector3d reference_axis  = normalized_or_zero(component.reference_axis);
-            const Eigen::Vector3d world_tool_axis = rotation * tool_axis;
-            task_jacobian.row(i)                  = world_tool_axis.cross(reference_axis).transpose() * geometric_jacobian.bottomRows(3);
-            break;
-        }
-        default: task_jacobian.row(i).setZero(); break;
-        }
+    if (!task_mapping_->jacobian_map(q, geometric_jacobian, &task_jacobian)) {
+        return {};
+    }
+
+    if (task_jacobian.cols() != geometric_jacobian.cols() || !task_jacobian.allFinite()) {
+        return {};
     }
 
     return task_jacobian;
@@ -49,9 +33,9 @@ Eigen::MatrixXd IKSolver::jacobian(const Eigen::VectorXd& q, const std::vector<T
 IKResult IKSolver::solve(const IKProblem& problem) {
     IKResult result;
 
-    const std::vector<TaskUnit>& components = problem.task.components();
-    const int m                             = static_cast<int>(components.size());
-    const int n                             = robot_->dof();
+    const std::vector<TaskUnit>& components = problem.task;
+    const int m = static_cast<int>(components.size());
+    const int n = robot_->dof();
 
     if (m <= 0 || problem.initial_q.size() != n) {
         return result;
@@ -83,21 +67,32 @@ IKResult IKSolver::solve(const IKProblem& problem) {
         error.resize(m);
         for (int i = 0; i < m; ++i) {
             const TaskUnit& component = components[static_cast<std::size_t>(i)];
-            double current            = 0.0;
+            double current = 0.0;
             switch (component.type) {
             case TaskUnit::PositionX:
             case TaskUnit::PositionY:
-            case TaskUnit::PositionZ: current = pose.translation()[static_cast<Eigen::Index>(component.type)]; break;
-            case TaskUnit::AxisDot: {
-                const Eigen::Vector3d tool_axis      = normalized_or_zero(component.tool_axis);
-                const Eigen::Vector3d reference_axis = normalized_or_zero(component.reference_axis);
-                current                              = reference_axis.dot(pose.rotation() * tool_axis);
+            case TaskUnit::PositionZ:
+                current = pose.translation()[static_cast<Eigen::Index>(component.type)];
+                break;
+            case TaskUnit::AxisXX:
+            case TaskUnit::AxisYY:
+            case TaskUnit::AxisZZ: {
+                constexpr double kAxisEpsilon = 1e-12;
+                const Eigen::Index axis_index =
+                    static_cast<Eigen::Index>(component.type) - TaskUnit::AxisXX;
+                const double reference_norm = component.reference_axis.norm();
+                if (reference_norm <= kAxisEpsilon) {
+                    current = 0.0;
+                    break;
+                }
+                current = component.reference_axis.normalized().dot(pose.rotation().col(axis_index));
                 break;
             }
-            default: current = std::numeric_limits<double>::quiet_NaN(); break;
+            default: return false;
             }
             error[i] = target[i] - current;
         }
+        return error.allFinite();
     };
 
     constexpr int kMaxIterations = 200;
@@ -112,7 +107,9 @@ IKResult IKSolver::solve(const IKProblem& problem) {
     for (int iter = 0; iter < kMaxIterations; ++iter) {
         result.iterations = iter + 1;
 
-        compute_error(q, error);
+        if (!compute_error(q, error)) {
+            return result;
+        }
         const double error_norm = error.norm();
         result.error_norm       = error_norm;
         if (error_norm < kTolerance) {
@@ -122,7 +119,10 @@ IKResult IKSolver::solve(const IKProblem& problem) {
         }
 
         // Weighted task Jacobian and residual.
-        const Eigen::MatrixXd J  = jacobian(q, problem.task);
+        const Eigen::MatrixXd J = jacobian(q);
+        if (J.rows() != m || J.cols() != n) {
+            return result;
+        }
         const Eigen::MatrixXd Jw = weights.asDiagonal() * J;
         const Eigen::VectorXd ew = weights.cwiseProduct(error);
 
@@ -171,7 +171,9 @@ IKResult IKSolver::solve(const IKProblem& problem) {
         q += dq;
     }
 
-    compute_error(q, error);
+    if (!compute_error(q, error)) {
+        return result;
+    }
     result.q          = q;
     result.error_norm = error.norm();
     result.success    = result.error_norm < kTolerance;
