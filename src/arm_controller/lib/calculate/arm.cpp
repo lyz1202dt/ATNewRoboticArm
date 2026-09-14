@@ -28,25 +28,24 @@ Eigen::VectorXd ArmSolve::inverse_dynamic(
         message << "Invalid joint position size: expected " << joint_count << ", got " << joint_pos.size();
         throw std::invalid_argument(message.str());
     }
+    if (!joint_pos.allFinite()) {
+        throw std::invalid_argument("Joint position contains non-finite values");
+    }
 
     constexpr double kJacobianDifferenceStep = 1e-6;
 
-    Eigen::VectorXd joint_vel;
-    Eigen::VectorXd joint_acc;
-    Eigen::MatrixXd jacobian;
-
-    const auto jacobian_solver              = jacobian.completeOrthogonalDecomposition();
-    joint_vel                               = jacobian_solver.solve(task_vel);
-    const Eigen::MatrixXd next_jacobian     = ik_solver_->jacobian(joint_pos + kJacobianDifferenceStep * joint_vel);
-    const Eigen::VectorXd jacobian_velocity = ((next_jacobian - jacobian) / kJacobianDifferenceStep) * joint_vel;
-    joint_acc                               = jacobian_solver.solve(task_acc - jacobian_velocity);
-
-    if (!joint_vel.allFinite() || !joint_acc.allFinite()) {
-        throw std::runtime_error("Unable to map velocity or acceleration to joint space");
-    }
-
+    const Eigen::MatrixXd jacobian = ik_solver_->jacobian(joint_pos);
+    const auto jacobian_solver = jacobian.completeOrthogonalDecomposition();
+    const Eigen::VectorXd joint_vel = jacobian_solver.solve(task_vel);
+    // x_ddot = J(q) q_ddot + J_dot(q, q_dot) q_dot.
+    const Eigen::MatrixXd next_jacobian =
+        ik_solver_->jacobian(joint_pos + kJacobianDifferenceStep * joint_vel);
+    const Eigen::VectorXd jacobian_velocity =
+        ((next_jacobian - jacobian) / kJacobianDifferenceStep) * joint_vel;
+    const Eigen::VectorXd joint_acc = jacobian_solver.solve(task_acc - jacobian_velocity);
     Eigen::VectorXd joint_torque = model_->inverse_dynamic(joint_pos, joint_vel, joint_acc);
-    joint_torque += jacobian.transpose() * task_force;
+    const Eigen::VectorXd task_force_torque = jacobian.transpose() * task_force;
+    joint_torque += task_force_torque;
     return joint_torque;
 }
 

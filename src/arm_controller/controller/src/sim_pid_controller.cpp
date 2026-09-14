@@ -2,8 +2,6 @@
 
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
 #include <pluginlib/class_list_macros.hpp>
-#include <pinocchio/multibody/model.hpp>
-#include <pinocchio/parsers/urdf.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -17,7 +15,7 @@ SimPidController::SimPidController() = default;
 
 controller_interface::CallbackReturn SimPidController::on_init() {
     auto node = get_node();
-    node->declare_parameter<std::string>("urdf_path", "");
+    node->declare_parameter<std::vector<std::string>>("joints");
     return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -26,15 +24,7 @@ controller_interface::CallbackReturn SimPidController::on_configure(
     (void)previous_state;
 
     auto node = get_node();
-    std::string urdf_path;
-    node->get_parameter<std::string>("urdf_path", urdf_path);
-
-    pinocchio::Model model;
-    pinocchio::urdf::buildModel(urdf_path, model);
-    joints_name_.reserve(model.names.size() > 0 ? model.names.size() - 1 : 0);
-    for (std::size_t i = 1; i < model.names.size(); ++i) {
-        joints_name_.push_back(model.names[i]);
-    }
+    node->get_parameter<std::vector<std::string>>("joints", joints_name_);
 
     reference_interfaces_.assign(joints_name_.size() * kReferenceInterfaceCount, 0.0);
     integral_error_.assign(joints_name_.size(), 0.0);

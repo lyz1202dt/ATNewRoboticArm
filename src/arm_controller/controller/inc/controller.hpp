@@ -28,8 +28,6 @@ public:
     controller_interface::InterfaceConfiguration state_interface_configuration() const override;
 
 private:
-    std::string command_interface_name(const std::string& joint_name, const std::string& interface_name) const;
-
     rclcpp_lifecycle::LifecycleNode::OnSetParametersCallbackHandle::SharedPtr param_cb_;
 
     std::shared_ptr<FSMArmControlFactory> fsm_factory;

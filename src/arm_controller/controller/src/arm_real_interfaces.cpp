@@ -157,12 +157,7 @@ hardware_interface::return_type ArmRealInterfaces::write(const rclcpp::Time& tim
         pack.motor[i].kd = static_cast<float>(commands_[i].kd);
         pack.motor[i].ki = static_cast<float>(commands_[i].ki);
     }
-
-    const int sent_size = cdc_->send_struct(pack);
-    if (sent_size != static_cast<int>(sizeof(pack))) {
-        return hardware_interface::return_type::ERROR;
-    }
-
+    cdc_->send_struct(pack);
     return hardware_interface::return_type::OK;
 }
 

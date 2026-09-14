@@ -132,12 +132,12 @@ controller_interface::InterfaceConfiguration ArmController::command_interface_co
     cfg.type = controller_interface::interface_configuration_type::INDIVIDUAL;
 
     for (const auto& name : joints_name) {
-        cfg.names.push_back(command_interface_name(name, "position"));
-        cfg.names.push_back(command_interface_name(name, "velocity"));
-        cfg.names.push_back(command_interface_name(name, "effort"));
-        cfg.names.push_back(command_interface_name(name, "kp"));
-        cfg.names.push_back(command_interface_name(name, "kd"));
-        cfg.names.push_back(command_interface_name(name, "ki"));
+        cfg.names.push_back(name + "/position");
+        cfg.names.push_back(name + "/velocity");
+        cfg.names.push_back(name + "/effort");
+        cfg.names.push_back(name + "/kp");
+        cfg.names.push_back(name + "/kd");
+        cfg.names.push_back(name + "/ki");
     }
     return cfg;
 }

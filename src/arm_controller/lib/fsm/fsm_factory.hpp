@@ -22,6 +22,7 @@ public:
     bool run() {
         if(first_run)
         {
+            first_run=false;
             current_fsm->enter("");
             return true;
         }
