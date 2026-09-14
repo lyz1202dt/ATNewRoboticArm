@@ -1,14 +1,15 @@
 #pragma once
 
 #include <string>
+#include <any>
 
 class FSMFactory;
 
 class FSM {
 public:
-    FSM(const std::string& fsm_name, FSMFactory* factory)
+    FSM(const std::string& fsm_name, std::any ctx)
         : fsm_name_(fsm_name)
-        , factory_(factory) {}
+        , ctx_(ctx) {}
 
     virtual ~FSM() = default;
 
@@ -34,7 +35,7 @@ public:
 
 protected:
     std::string fsm_name_;
-    FSMFactory* factory_;
+    std::any ctx_;
 
 private:
     

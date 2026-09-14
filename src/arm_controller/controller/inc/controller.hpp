@@ -7,6 +7,8 @@
 #include <rclcpp/subscription.hpp>
 #include <rclcpp/time.hpp>
 #include <../arm/arm_fsm.hpp>
+#include <unordered_map>
+#include <controller_interface/controller_interface_base.hpp>
 
 namespace arm_controller {
 
@@ -28,6 +30,7 @@ private:
     rclcpp_lifecycle::LifecycleNode::OnSetParametersCallbackHandle::SharedPtr param_cb_;
 
     std::shared_ptr<FSMArmControlFactory> fsm_factory;
+    std::vector<std::string> joints_name;
 };
 
 }  // namespace arm_controller
