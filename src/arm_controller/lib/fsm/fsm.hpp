@@ -33,9 +33,9 @@ public:
     }
 
 protected:
-    FSMFactory* factory() const { return factory_; }
-
-private:
     std::string fsm_name_;
     FSMFactory* factory_;
+
+private:
+    
 };

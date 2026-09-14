@@ -2,9 +2,11 @@
 
 
 #include <controller_interface/controller_interface.hpp>
+#include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/subscription.hpp>
 #include <rclcpp/time.hpp>
+#include <../arm/arm_fsm.hpp>
 
 namespace arm_controller {
 
@@ -25,7 +27,7 @@ public:
 private:
     rclcpp_lifecycle::LifecycleNode::OnSetParametersCallbackHandle::SharedPtr param_cb_;
 
-    rclcpp::Time last_target_log_time_{0, 0, RCL_ROS_TIME};
+    std::shared_ptr<FSMArmControlFactory> fsm_factory;
 };
 
 }  // namespace arm_controller
