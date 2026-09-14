@@ -29,14 +29,11 @@ controller_interface::CallbackReturn ArmController::on_init() {
             auto name = param.get_name();
             if (name == "exp_state") {
                 fsm_factory->exp_state_name = param.as_string();
-            }
-            else {
+            } else {
             }
         }
         return result;
     });
-
-    //加载默认kp和kd参数
 
     // 从URDF加载关节名字
     std::string urdf_path;
@@ -46,6 +43,12 @@ controller_interface::CallbackReturn ArmController::on_init() {
     joints_name.resize(joints_name.size());
     for (int i = 1; i < joints_name.size(); i++)
         joints_name[i - 1] = model.names[i];
+
+    // 加载默认kp和kd参数
+    default_kp.resize(joints_name.size());
+    default_kd.resize(joints_name.size());
+    node->get_parameter("default_kp", default_kp);
+    node->get_parameter("default_kd", default_kd);
     return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -70,23 +73,32 @@ controller_interface::return_type ArmController::update(const rclcpp::Time& time
     (void)time;
     (void)period;
 
-    for (int i = 0; i < joints_name.size(); i++) {      //更新状态机工场的状态值
-        fsm_factory->state_[i].position=static_cast<float>(state_interfaces_[i*3+0].get_value());
-        fsm_factory->state_[i].velocity=static_cast<float>(state_interfaces_[i*3+1].get_value());
-        fsm_factory->state_[i].torque=static_cast<float>(state_interfaces_[i*3+2].get_value());
+    for (int i = 0; i < joints_name.size(); i++) {     // 更新状态机工场的状态值
+        fsm_factory->state_[i].position = static_cast<float>(state_interfaces_[i * 3 + 0].get_value());
+        fsm_factory->state_[i].velocity = static_cast<float>(state_interfaces_[i * 3 + 1].get_value());
+        fsm_factory->state_[i].torque   = static_cast<float>(state_interfaces_[i * 3 + 2].get_value());
     }
-    
-    bool ret = fsm_factory->run();
-    if (!ret)
-        return controller_interface::return_type::ERROR;
 
-    for (int i = 0; i < joints_name.size(); i++) {      //更新状态机工场的状态值
-        fsm_factory->command_[i].position=static_cast<float>(state_interfaces_[i*6+0].get_value());
-        fsm_factory->command_[i].velocity=static_cast<float>(state_interfaces_[i*6+1].get_value());
-        fsm_factory->command_[i].torque=static_cast<float>(state_interfaces_[i*6+2].get_value());
-        fsm_factory->command_[i].kp=static_cast<float>(state_interfaces_[i*6+3].get_value());
-        fsm_factory->command_[i].kd=static_cast<float>(state_interfaces_[i*6+4].get_value());
-        fsm_factory->command_[i].ki=static_cast<float>(state_interfaces_[i*6+5].get_value());
+    bool ret = fsm_factory->run();
+    if (!ret) {
+        for (int i = 0; i < joints_name.size(); i++) { // 安全保护
+            command_interfaces_[i * 6 + 0].set_value(state_interfaces_[i * 3 + 0].get_value());
+            command_interfaces_[i * 6 + 1].set_value(0.0);
+            command_interfaces_[i * 6 + 2].set_value(0.0);
+            command_interfaces_[i * 6 + 3].set_value(static_cast<float>(state_interfaces_[i * 6 + 3].get_value()));
+            command_interfaces_[i * 6 + 4].set_value(static_cast<float>(state_interfaces_[i * 6 + 4].get_value()));
+            command_interfaces_[i * 6 + 5].set_value(0.0f);
+        }
+        return controller_interface::return_type::ERROR;
+    }
+
+    for (int i = 0; i < joints_name.size(); i++) {     // 更新状态机工场的状态值
+        command_interfaces_[i * 6 + 0].set_value(fsm_factory->command_[i].position);
+        command_interfaces_[i * 6 + 1].set_value(fsm_factory->command_[i].velocity);
+        command_interfaces_[i * 6 + 2].set_value(fsm_factory->command_[i].torque);
+        command_interfaces_[i * 6 + 3].set_value(fsm_factory->command_[i].kp);
+        command_interfaces_[i * 6 + 4].set_value(fsm_factory->command_[i].kd);
+        command_interfaces_[i * 6 + 5].set_value(fsm_factory->command_[i].ki);
     }
 
     return controller_interface::return_type::OK;

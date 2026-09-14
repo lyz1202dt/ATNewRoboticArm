@@ -38,7 +38,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-pluginlib_export_plugin_description_file(controller_interface plugin.xml)
+pluginlib_export_plugin_description_file(controller_interface arm_ctrl_plugin.xml)
 
 add_library(arm_controller SHARED
   controller/src/controller.cpp
@@ -78,7 +78,7 @@ install(TARGETS arm_controller
 LIBRARY DESTINATION lib)
 
 install(
-  FILES plugin.xml
+  FILES arm_ctrl_plugin.xml
   DESTINATION share/${PROJECT_NAME}
 )
 

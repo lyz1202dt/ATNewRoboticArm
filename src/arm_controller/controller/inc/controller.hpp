@@ -31,6 +31,7 @@ private:
 
     std::shared_ptr<FSMArmControlFactory> fsm_factory;
     std::vector<std::string> joints_name;
+    std::vector<float> default_kp,default_kd;
 };
 
 }  // namespace arm_controller
