@@ -1,0 +1,6 @@
+<library path="arm_controller">
+  <class
+    name="arm_controller/SimPidController"
+    type="arm_controller::SimPidController"
+    base_class_type="controller_interface::ChainableControllerInterface"/>
+</library>

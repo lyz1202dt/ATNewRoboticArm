@@ -13,6 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(PkgConfig REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(controller_interface REQUIRED)
 find_package(hardware_interface REQUIRED)
@@ -25,6 +26,7 @@ find_package(Eigen3 REQUIRED)
 find_package(robot_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(arm_model REQUIRED)
+pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -39,20 +41,26 @@ if(BUILD_TESTING)
 endif()
 
 pluginlib_export_plugin_description_file(controller_interface arm_ctrl_plugin.xml)
+pluginlib_export_plugin_description_file(controller_interface sim_pid_plugin.xml)
+pluginlib_export_plugin_description_file(hardware_interface arm_real_plugin.xml)
 
 add_library(arm_controller SHARED
   controller/src/controller.cpp
-  arm/arm_fsm.cpp
+  controller/src/sim_pid_controller.cpp
+  controller/src/arm_real_interfaces.cpp
   arm/default6dof_task.cpp
   arm/model_from_urdf.cpp
   lib/calculate/arm.cpp
   lib/calculate/kinamic.cpp
   lib/calculate/trajectory.cpp
+  lib/cdc_trans/cdc_trans.cpp
 )
 
 target_include_directories(arm_controller PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/controller/inc>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/arm>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/calculate>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/cdc_trans>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/fsm>
   $<INSTALL_INTERFACE:include>
 )
@@ -60,6 +68,7 @@ target_include_directories(arm_controller PUBLIC
 ament_target_dependencies(
   arm_controller
   rclcpp
+  rclcpp_lifecycle
   controller_interface
   pluginlib
   hardware_interface
@@ -72,13 +81,17 @@ ament_target_dependencies(
 target_link_libraries(arm_controller
   Eigen3::Eigen
   pinocchio::pinocchio
+  PkgConfig::LIBUSB
 )
 
 install(TARGETS arm_controller
 LIBRARY DESTINATION lib)
 
 install(
-  FILES arm_ctrl_plugin.xml
+  FILES
+    arm_ctrl_plugin.xml
+    sim_pid_plugin.xml
+    arm_real_plugin.xml
   DESTINATION share/${PROJECT_NAME}
 )
 

@@ -7,6 +7,7 @@
 #include <rclcpp/subscription.hpp>
 #include <rclcpp/time.hpp>
 #include <../arm/arm_fsm.hpp>
+#include <string>
 #include <unordered_map>
 #include <controller_interface/controller_interface_base.hpp>
 
@@ -27,6 +28,8 @@ public:
     controller_interface::InterfaceConfiguration state_interface_configuration() const override;
 
 private:
+    std::string command_interface_name(const std::string& joint_name, const std::string& interface_name) const;
+
     rclcpp_lifecycle::LifecycleNode::OnSetParametersCallbackHandle::SharedPtr param_cb_;
 
     std::shared_ptr<FSMArmControlFactory> fsm_factory;

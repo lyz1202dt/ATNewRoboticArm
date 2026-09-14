@@ -1,7 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, LogInfo, RegisterEventHandler
 from launch.conditions import IfCondition
-from launch.event_handlers import OnProcessStart
+from launch.event_handlers import OnProcessExit, OnProcessStart
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -92,10 +92,17 @@ def generate_launch_description():
         output="screen",
     )
 
-    joint_controller = Node(
+    sim_pid_controller = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["dog_controller", "--controller-manager", "/controller_manager"],
+        arguments=["sim_pid_controller", "--controller-manager", "/controller_manager"],
+        output="screen",
+    )
+
+    arm_controller = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["arm_controller", "--controller-manager", "/controller_manager"],
         output="screen",
     )
 
@@ -122,8 +129,18 @@ def generate_launch_description():
         OnProcessStart(
             target_action=mujoco,
             on_start=[
-                LogInfo(msg="MuJoCo started, spawning dog_controller"),
-                joint_controller,
+                LogInfo(msg="MuJoCo started, spawning sim_pid_controller"),
+                sim_pid_controller,
+            ],
+        )
+    )
+
+    load_arm_controller = RegisterEventHandler(
+        OnProcessExit(
+            target_action=sim_pid_controller,
+            on_exit=[
+                LogInfo(msg="sim_pid_controller spawned, spawning arm_controller"),
+                arm_controller,
             ],
         )
     )
@@ -141,6 +158,7 @@ def generate_launch_description():
             robot_state_pub,
             mujoco,
             load_controller,
+            load_arm_controller,
             parameter_measure,
         ]
     )

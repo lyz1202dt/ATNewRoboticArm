@@ -8,12 +8,14 @@
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>pkg-config</buildtool_depend>
 
   <depend>rclcpp</depend>
   <depend>controller_interface</depend>
   <depend>hardware_interface</depend>
   <depend>pluginlib</depend>
   <depend>rclcpp_lifecycle</depend>
+  <depend>libusb-1.0</depend>
   <depend>eigen</depend>
   <depend>robot_msgs</depend>
   <depend>kdl_parser</depend>

@@ -1,0 +1,6 @@
+<library path="arm_controller">
+  <class
+    name="arm_controller/ArmRealInterfaces"
+    type="arm_controller::ArmRealInterfaces"
+    base_class_type="hardware_interface::SystemInterface"/>
+</library>

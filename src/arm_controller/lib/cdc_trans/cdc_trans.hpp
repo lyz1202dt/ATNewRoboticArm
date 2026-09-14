@@ -4,6 +4,7 @@
 #include <atomic>
 #include <functional>
 #include <libusb-1.0/libusb.h>
+#include <type_traits>
 
 class CDCTrans {
 public:
