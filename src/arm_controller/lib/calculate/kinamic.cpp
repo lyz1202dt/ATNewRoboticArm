@@ -22,87 +22,103 @@ IKSolver::IKSolver(std::shared_ptr<ModelBase> robot, std::shared_ptr<TaskMapping
     }
 }
 
-Eigen::VectorXd IKSolver::task_position(const Eigen::VectorXd& joint_pos) {
-
-    Eigen::VectorXd position;
-    if (!task_mapping_->position_map(joint_pos, robot_->forward_kinematics(joint_pos), &position)
-        || position.size() == 0 || !position.allFinite()) {
-        return {};
+bool IKSolver::task_position(const Eigen::VectorXd& joint_pos, Eigen::VectorXd* task_position) {
+    if (task_position == nullptr) {
+        return false;
     }
-    return position;
+
+    if (!task_mapping_->position_map(joint_pos, robot_->forward_kinematics(joint_pos), task_position)
+        || task_position->size() == 0 || !task_position->allFinite()) {
+        task_position->resize(0);
+        return false;
+    }
+    return true;
 }
 
-Eigen::MatrixXd IKSolver::jacobian(const Eigen::VectorXd& joint_pos) {
-
-    const Eigen::MatrixXd geometric_jacobian = robot_->geometric_jacobian(joint_pos);
-    if (geometric_jacobian.rows() != 6 || geometric_jacobian.cols() != robot_->dof()
-        || !geometric_jacobian.allFinite()) {
-        return {};
+bool IKSolver::jacobian(const Eigen::VectorXd& joint_pos, Eigen::MatrixXd* task_jacobian) {
+    if (task_jacobian == nullptr) {
+        return false;
     }
 
-    Eigen::MatrixXd task_jacobian;
-    if (!task_mapping_->jacobian_map(joint_pos, geometric_jacobian, &task_jacobian)
-        || task_jacobian.rows() == 0 || task_jacobian.cols() != geometric_jacobian.cols()
-        || !task_jacobian.allFinite()) {
-        return {};
+    if (!robot_->geometric_jacobian(joint_pos, &workspace_.geometric_jacobian)
+        || workspace_.geometric_jacobian.rows() != 6
+        || workspace_.geometric_jacobian.cols() != robot_->dof()
+        || !workspace_.geometric_jacobian.allFinite()) {
+        task_jacobian->resize(0, 0);
+        return false;
     }
 
-    return task_jacobian;
+    if (!task_mapping_->jacobian_map(joint_pos, workspace_.geometric_jacobian, task_jacobian)
+        || task_jacobian->rows() == 0 || task_jacobian->cols() != workspace_.geometric_jacobian.cols()
+        || !task_jacobian->allFinite()) {
+        task_jacobian->resize(0, 0);
+        return false;
+    }
+
+    return true;
 }
 
 bool IKSolver::solve(const Eigen::VectorXd& target, Eigen::VectorXd& joint_pos) {
 
     const int joint_count = robot_->dof();
-    Eigen::VectorXd solution = joint_pos;
-    const Eigen::VectorXd lower = robot_->lower_jointLimit();
-    const Eigen::VectorXd upper = robot_->upper_jointLimit();
+    workspace_.solution = joint_pos;
+    const Eigen::VectorXd& lower = robot_->lower_jointLimit();
+    const Eigen::VectorXd& upper = robot_->upper_jointLimit();
     const bool use_joint_limits = lower.size() == joint_count && upper.size() == joint_count
         && lower.allFinite() && upper.allFinite();
 
-    if (!solution.allFinite()) {
+    if (!workspace_.solution.allFinite()) {
         return false;
     }
     if (use_joint_limits) {
-        solution = solution.cwiseMax(lower).cwiseMin(upper);
+        workspace_.solution = workspace_.solution.cwiseMax(lower).cwiseMin(upper);
     }
 
     for (int iteration = 0; iteration < kMaxIterations; ++iteration) {
-        const Eigen::VectorXd current = task_position(solution);
-        if (current.size() != target.size()) {
+        if (!task_position(workspace_.solution, &workspace_.current) || workspace_.current.size() != target.size()) {
             return false;
         }
 
-        const Eigen::VectorXd error = target - current;
-        if (!error.allFinite()) {
+        workspace_.error.resize(target.size());
+        workspace_.error.noalias() = target - workspace_.current;
+        if (!workspace_.error.allFinite()) {
             return false;
         }
-        if (error.norm() < kTolerance) {
-            joint_pos = solution;
+        if (workspace_.error.norm() < kTolerance) {
+            joint_pos = workspace_.solution;
             return true;
         }
 
-        const Eigen::MatrixXd task_jacobian = jacobian(solution);
-        if (task_jacobian.rows() != target.size() || task_jacobian.cols() != joint_count) {
+        if (!jacobian(workspace_.solution, &workspace_.task_jacobian)
+            || workspace_.task_jacobian.rows() != target.size()
+            || workspace_.task_jacobian.cols() != joint_count) {
             return false;
         }
 
-        const Eigen::MatrixXd hessian = task_jacobian.transpose() * task_jacobian
-            + kDamping * kDamping * Eigen::MatrixXd::Identity(joint_count, joint_count);
-        Eigen::VectorXd joint_step = hessian.ldlt().solve(task_jacobian.transpose() * error);
-        if (!joint_step.allFinite()) {
+        workspace_.hessian.resize(joint_count, joint_count);
+        workspace_.hessian.noalias() = workspace_.task_jacobian.transpose() * workspace_.task_jacobian;
+        workspace_.hessian.diagonal().array() += kDamping * kDamping;
+
+        workspace_.rhs.resize(joint_count);
+        workspace_.rhs.noalias() = workspace_.task_jacobian.transpose() * workspace_.error;
+        workspace_.ldlt.compute(workspace_.hessian);
+        workspace_.joint_step = workspace_.ldlt.solve(workspace_.rhs);
+        if (!workspace_.joint_step.allFinite()) {
             return false;
         }
 
-        joint_step = joint_step.cwiseMax(-kMaxJointStep).cwiseMin(kMaxJointStep);
+        workspace_.joint_step = workspace_.joint_step.cwiseMax(-kMaxJointStep).cwiseMin(kMaxJointStep);
         if (use_joint_limits) {
-            joint_step = joint_step.cwiseMax(lower - solution).cwiseMin(upper - solution);
+            workspace_.joint_step =
+                workspace_.joint_step.cwiseMax(lower - workspace_.solution).cwiseMin(upper - workspace_.solution);
         }
-        solution += joint_step;
+        workspace_.solution += workspace_.joint_step;
     }
 
-    const Eigen::VectorXd current = task_position(solution);
-    if (current.size() == target.size() && (target - current).norm() < kTolerance) {
-        joint_pos = solution;
+    if (task_position(workspace_.solution, &workspace_.current)
+        && workspace_.current.size() == target.size()
+        && (target - workspace_.current).norm() < kTolerance) {
+        joint_pos = workspace_.solution;
         return true;
     }
     return false;

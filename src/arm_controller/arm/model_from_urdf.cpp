@@ -37,17 +37,26 @@ Eigen::Isometry3d ModelFromURDF::forward_kinematics(const Eigen::VectorXd& q) co
     return pose;
 }
 
-Eigen::MatrixXd ModelFromURDF::geometric_jacobian(const Eigen::VectorXd& q) const {
+bool ModelFromURDF::geometric_jacobian(const Eigen::VectorXd& q, Eigen::MatrixXd* jacobian) const {
+    if (jacobian == nullptr) {
+        return false;
+    }
     check_vector_dimension(q);
 
-    Eigen::MatrixXd jacobian(6, model_.nv);
-    pinocchio::computeFrameJacobian(model_, data_, q, end_effector_frame_id_, pinocchio::LOCAL_WORLD_ALIGNED, jacobian);
-    return jacobian;
+    if (jacobian->rows() != 6 || jacobian->cols() != model_.nv) {
+        jacobian->resize(6, model_.nv);
+    }
+    pinocchio::computeFrameJacobian(model_, data_, q, end_effector_frame_id_, pinocchio::LOCAL_WORLD_ALIGNED, *jacobian);
+    return jacobian->allFinite();
 }
 
-Eigen::VectorXd ModelFromURDF::inverse_dynamic(Eigen::VectorXd q,
-                                               Eigen::VectorXd dq,
-                                               Eigen::VectorXd ddq) {
+bool ModelFromURDF::inverse_dynamic(const Eigen::VectorXd& q,
+                                    const Eigen::VectorXd& dq,
+                                    const Eigen::VectorXd& ddq,
+                                    Eigen::VectorXd* joint_torque) {
+    if (joint_torque == nullptr) {
+        return false;
+    }
     check_vector_dimension(q);
     if (dq.size() != model_.nv) {
         std::ostringstream message;
@@ -60,14 +69,18 @@ Eigen::VectorXd ModelFromURDF::inverse_dynamic(Eigen::VectorXd q,
         throw std::invalid_argument(message.str());
     }
 
-    return pinocchio::rnea(model_, data_, q, dq, ddq);
+    if (joint_torque->size() != model_.nv) {
+        joint_torque->resize(model_.nv);
+    }
+    *joint_torque = pinocchio::rnea(model_, data_, q, dq, ddq);
+    return joint_torque->allFinite();
 }
 
-Eigen::VectorXd ModelFromURDF::lower_jointLimit() const {
+const Eigen::VectorXd& ModelFromURDF::lower_jointLimit() const {
     return model_.lowerPositionLimit;
 }
 
-Eigen::VectorXd ModelFromURDF::upper_jointLimit() const {
+const Eigen::VectorXd& ModelFromURDF::upper_jointLimit() const {
     return model_.upperPositionLimit;
 }
 

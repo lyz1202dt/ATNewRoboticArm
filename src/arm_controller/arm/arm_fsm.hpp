@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include <Eigen/Dense>
 #include <rclcpp/time.hpp>
 
 class FSMArmControlFactory;
@@ -110,4 +111,8 @@ private:
     std::size_t joint_count_{0};
     std::vector<float> default_kd_;
     std::vector<double> default_kd_param_;
+    Eigen::VectorXd joint_pos_;
+    Eigen::VectorXd task_zero_;
+    Eigen::VectorXd gravity_torque_;
+    Eigen::VectorXd end_effector_pose_;
 };

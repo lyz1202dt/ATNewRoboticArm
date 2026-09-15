@@ -282,6 +282,10 @@ TeachPendantState::TeachPendantState(const std::string& name, std::any ctx)
     const std::size_t param_capacity = std::max(joint_count_, default_kd_param_.size());
     default_kd_param_.reserve(param_capacity);
     default_kd_.resize(joint_count_);
+    joint_pos_.resize(joint_count_);
+    task_zero_.setZero(6);
+    gravity_torque_.resize(joint_count_);
+    end_effector_pose_.resize(6);
 }
 
 bool TeachPendantState::enter(const std::string& last_state) {
@@ -314,17 +318,19 @@ bool TeachPendantState::run() {
         return false;
     }
 
-    Eigen::VectorXd joint_pos(joint_count_);
     for (std::size_t i = 0; i < joint_count_; ++i) {
-        joint_pos(static_cast<Eigen::Index>(i)) = factory->state_[i].position;
+        joint_pos_(static_cast<Eigen::Index>(i)) = factory->state_[i].position;
     }
 
-    Eigen::VectorXd gravity_torque;
-    Eigen::VectorXd end_effector_pose;
     try {
-        const Eigen::VectorXd task_zero = Eigen::VectorXd::Zero(6);
-        gravity_torque = factory->arm_solve_->inverse_dynamic(joint_pos, task_zero, task_zero, task_zero);
-        end_effector_pose = factory->arm_solve_->forward_kinamic(joint_pos);
+        if (!factory->arm_solve_->inverse_dynamic(joint_pos_, task_zero_, task_zero_, task_zero_, &gravity_torque_)
+            || !factory->arm_solve_->forward_kinamic(joint_pos_, &end_effector_pose_)) {
+            RCLCPP_WARN_THROTTLE(factory->node_->get_logger(),
+                                 *factory->node_->get_clock(),
+                                 1000,
+                                 "Teach pendant solve failed");
+            return false;
+        }
     } catch (const std::exception& error) {
         RCLCPP_WARN_THROTTLE(factory->node_->get_logger(),
                              *factory->node_->get_clock(),
@@ -334,14 +340,14 @@ bool TeachPendantState::run() {
         return false;
     }
 
-    if (gravity_torque.size() != static_cast<Eigen::Index>(joint_count_) || !gravity_torque.allFinite()
-        || end_effector_pose.size() != 6 || !end_effector_pose.allFinite()) {
+    if (gravity_torque_.size() != static_cast<Eigen::Index>(joint_count_) || !gravity_torque_.allFinite()
+        || end_effector_pose_.size() != 6 || !end_effector_pose_.allFinite()) {
         RCLCPP_WARN_THROTTLE(factory->node_->get_logger(),
                              *factory->node_->get_clock(),
                              1000,
                              "Teach pendant solve returned invalid result: gravity torque size=%ld, pose size=%ld",
-                             gravity_torque.size(),
-                             end_effector_pose.size());
+                             gravity_torque_.size(),
+                             end_effector_pose_.size());
         return false;
     }
 
@@ -349,7 +355,7 @@ bool TeachPendantState::run() {
         auto& command    = factory->command_[i];
         command.position = factory->state_[i].position;
         command.velocity = 0.0f;
-        command.torque   = static_cast<float>(gravity_torque(static_cast<Eigen::Index>(i)));
+        command.torque   = static_cast<float>(gravity_torque_(static_cast<Eigen::Index>(i)));
         command.kp       = 0.0f;
         command.kd       = default_kd_[i];
         command.ki       = 0.0f;
@@ -360,12 +366,12 @@ bool TeachPendantState::run() {
                          200,
                          "Teach pendant end-effector pose: position[x=%.6f, y=%.6f, z=%.6f], "
                          "rotation_vector[rx=%.6f, ry=%.6f, rz=%.6f]",
-                         end_effector_pose(0),
-                         end_effector_pose(1),
-                         end_effector_pose(2),
-                         end_effector_pose(3),
-                         end_effector_pose(4),
-                         end_effector_pose(5));
+                         end_effector_pose_(0),
+                         end_effector_pose_(1),
+                         end_effector_pose_(2),
+                         end_effector_pose_(3),
+                         end_effector_pose_(4),
+                         end_effector_pose_(5));
 
     return true;
 }
