@@ -14,8 +14,7 @@ namespace arm_controller {
 SimPidController::SimPidController() = default;
 
 controller_interface::CallbackReturn SimPidController::on_init() {
-    auto node = get_node();
-    node->declare_parameter<std::vector<std::string>>("joints");
+    auto_declare<std::vector<std::string>>("joints", {});
     return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -125,14 +124,14 @@ std::vector<hardware_interface::CommandInterface> SimPidController::on_export_re
 
     for (std::size_t i = 0; i < joints_name_.size(); ++i) {
         const std::size_t base = i * kReferenceInterfaceCount;
-        const auto prefix = std::string(get_node()->get_name()) + "/" + joints_name_[i];
+        const auto prefix = std::string(get_node()->get_name());
 
-        reference_interfaces.emplace_back(prefix, "position", &reference_interfaces_[base + 0]);
-        reference_interfaces.emplace_back(prefix, "velocity", &reference_interfaces_[base + 1]);
-        reference_interfaces.emplace_back(prefix, "effort", &reference_interfaces_[base + 2]);
-        reference_interfaces.emplace_back(prefix, "kp", &reference_interfaces_[base + 3]);
-        reference_interfaces.emplace_back(prefix, "kd", &reference_interfaces_[base + 4]);
-        reference_interfaces.emplace_back(prefix, "ki", &reference_interfaces_[base + 5]);
+        reference_interfaces.emplace_back(prefix, joints_name_[i] + "/position", &reference_interfaces_[base + 0]);
+        reference_interfaces.emplace_back(prefix, joints_name_[i] + "/velocity", &reference_interfaces_[base + 1]);
+        reference_interfaces.emplace_back(prefix, joints_name_[i] + "/effort", &reference_interfaces_[base + 2]);
+        reference_interfaces.emplace_back(prefix, joints_name_[i] + "/kp", &reference_interfaces_[base + 3]);
+        reference_interfaces.emplace_back(prefix, joints_name_[i] + "/kd", &reference_interfaces_[base + 4]);
+        reference_interfaces.emplace_back(prefix, joints_name_[i] + "/ki", &reference_interfaces_[base + 5]);
     }
 
     return reference_interfaces;

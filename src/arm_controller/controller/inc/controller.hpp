@@ -33,6 +33,7 @@ private:
 
     std::shared_ptr<FSMArmControlFactory> fsm_factory;
     std::vector<std::string> joints_name;
+    std::string command_interface_prefix_;
     std::vector<float> default_kp,default_kd;
 };
 

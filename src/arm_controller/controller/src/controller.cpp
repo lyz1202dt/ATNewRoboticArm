@@ -1,5 +1,6 @@
 #include "../inc/controller.hpp"
 
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include <controller_interface/controller_interface.hpp>
 #include <memory>
 #include <pluginlib/class_list_macros.hpp>
@@ -29,10 +30,29 @@ controller_interface::CallbackReturn ArmController::on_init() {
     auto_declare<std::vector<std::string>>("joints", {});
     auto_declare<std::string>("urdf_path", "");
     auto_declare<std::string>("exp_state", "idel");
+    auto_declare<std::string>("command_interface_prefix", "");
 
     node->get_parameter<std::vector<std::string>>("joints", joints_name);
+    node->get_parameter<std::string>("command_interface_prefix", command_interface_prefix_);
 
-    fsm_factory = std::make_shared<FSMArmControlFactory>(node);
+    std::string urdf_path;
+    node->get_parameter<std::string>("urdf_path", urdf_path);
+    if (urdf_path.empty()) {
+        try {
+            urdf_path = ament_index_cpp::get_package_share_directory("arm_model") + "/model/robotic_arm.urdf";
+            node->set_parameter(rclcpp::Parameter("urdf_path", urdf_path));
+        } catch (const std::exception& error) {
+            RCLCPP_ERROR(node->get_logger(), "Failed to locate default arm_model URDF: %s", error.what());
+            return controller_interface::CallbackReturn::ERROR;
+        }
+    }
+
+    try {
+        fsm_factory = std::make_shared<FSMArmControlFactory>(node);
+    } catch (const std::exception& error) {
+        RCLCPP_ERROR(node->get_logger(), "Failed to initialize arm controller FSM: %s", error.what());
+        return controller_interface::CallbackReturn::ERROR;
+    }
 
     param_cb_ = node->add_on_set_parameters_callback([this](const std::vector<rclcpp::Parameter>& params) {
         rcl_interfaces::msg::SetParametersResult result;
@@ -41,9 +61,9 @@ controller_interface::CallbackReturn ArmController::on_init() {
             auto name = param.get_name();
             if (name == "exp_state") {
                 fsm_factory->exp_state_name = param.as_string();
-            } else if (name == "joints") {
+            } else if (name == "joints" || name == "command_interface_prefix") {
                 result.successful = false;
-                result.reason     = "joints cannot be changed after initialization";
+                result.reason     = name + " cannot be changed after initialization";
                 return result;
             } else if (name == "default_kp" || name == "default_kd" || name == "reset_joint_pos") {
                 if (param.as_double_array().size() > joints_name.size()) {
@@ -157,12 +177,13 @@ controller_interface::InterfaceConfiguration ArmController::command_interface_co
     cfg.type = controller_interface::interface_configuration_type::INDIVIDUAL;
 
     for (const auto& name : joints_name) {
-        cfg.names.push_back(name + "/position");
-        cfg.names.push_back(name + "/velocity");
-        cfg.names.push_back(name + "/effort");
-        cfg.names.push_back(name + "/kp");
-        cfg.names.push_back(name + "/kd");
-        cfg.names.push_back(name + "/ki");
+        const auto command_name = command_interface_prefix_.empty() ? name : command_interface_prefix_ + "/" + name;
+        cfg.names.push_back(command_name + "/position");
+        cfg.names.push_back(command_name + "/velocity");
+        cfg.names.push_back(command_name + "/effort");
+        cfg.names.push_back(command_name + "/kp");
+        cfg.names.push_back(command_name + "/kd");
+        cfg.names.push_back(command_name + "/ki");
     }
     return cfg;
 }
