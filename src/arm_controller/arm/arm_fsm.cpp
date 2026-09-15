@@ -376,3 +376,27 @@ bool TeachPendantState::run() {
 
     return true;
 }
+
+
+
+ParamterMeasureState::ParamterMeasureState(const std::string& name, std::any ctx)
+    : FSM(name, ctx) {
+}
+
+bool ParamterMeasureState::enter(const std::string& last_state) {
+    (void)last_state;
+    return true;
+}
+
+bool ParamterMeasureState::exit(const std::string& next_state) {
+    (void)next_state;
+    return true;
+}
+
+std::string ParamterMeasureState::check_switch() const {
+    return fsm_name_;
+}
+
+bool ParamterMeasureState::run() {
+    return true;
+}

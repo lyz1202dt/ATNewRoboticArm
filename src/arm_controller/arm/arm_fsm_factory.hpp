@@ -31,7 +31,8 @@ public:
         register_fsm(new ServoState("servo", this));                //伺服动作，接收速度指令，将指令积分作为期望位置
         register_fsm(new AdmittanceState("admittance", this));      //导纳控制
         register_fsm(new TeachPendantState("teach_pendant", this));   //示教器，可外力拖动，可配置带阻尼，重力补偿
-        
+        register_fsm(new TeachPendantState("measuer", this));       //系统参数辨识
+
         set_init_state("idel");
     }
     std::string exp_state_name{"idel"};

@@ -116,3 +116,13 @@ private:
     Eigen::VectorXd gravity_torque_;
     Eigen::VectorXd end_effector_pose_;
 };
+
+class ParamterMeasureState : public FSM {
+public:
+    ParamterMeasureState(const std::string& name, std::any ctx);
+
+    bool enter(const std::string& last_state) override;
+    bool exit(const std::string& next_state) override;
+    std::string check_switch() const override;
+    bool run() override;
+};
