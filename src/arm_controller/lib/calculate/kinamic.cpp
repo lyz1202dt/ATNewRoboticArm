@@ -1,6 +1,7 @@
 #include "kinamic.hpp"
 
 #include <stdexcept>
+#include <utility>
 
 namespace {
 
@@ -11,8 +12,8 @@ constexpr double kMaxJointStep   = 0.1;
 
 }  // namespace
 
-IKSolver::IKSolver(ModelBase* robot, TaskMapping* task_mapping)
-    : robot_(robot), task_mapping_(task_mapping) {
+IKSolver::IKSolver(std::shared_ptr<ModelBase> robot, std::shared_ptr<TaskMapping> task_mapping)
+    : robot_(std::move(robot)), task_mapping_(std::move(task_mapping)) {
     if (robot_ == nullptr) {
         throw std::invalid_argument("IKSolver requires a model");
     }

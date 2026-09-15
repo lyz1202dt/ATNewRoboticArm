@@ -6,6 +6,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/subscription.hpp>
 #include <rclcpp/time.hpp>
+#include <../arm/arm_fsm_factory.hpp>
 #include <../arm/arm_fsm.hpp>
 #include <string>
 #include <unordered_map>
