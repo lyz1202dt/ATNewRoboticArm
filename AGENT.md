@@ -1,63 +1,43 @@
-# RoboticArm Solver Notes
+# RoboticArm 项目笔记
 
-Kinematics/dynamics code lives in `src/arm_controller/lib/calculate`. The task
-space is user-defined and must not assume the classic 6D pose
-`[x, y, z, roll, pitch, yaw]`.
+`src/arm_controller` 是机械臂控制核心包，构建共享库 `arm_controller`，
+通过 pluginlib 导出控制器和硬件接口插件。
 
-```text
-ArmSolve -> IKSolver -> ModelBase   (FK / geometric Jacobian / dynamics / limits)
-                     -> TaskMapping (task coordinates + task Jacobian)
-```
+## 控制链路
 
-## Core Classes
+- 仿真：`ArmController` -> `SimPidController` -> `mujoco_ros2_control/MujocoSystem`
+- 实机：`ArmController` -> `ArmRealInterfaces` -> USB CDC -> MCU
+- 控制配置在 `src/launch_pack/config/ros2_controller.yaml`，默认 500 Hz。
 
-### `ModelBase` — `modelbase.hpp`
-Robot-model abstraction: `dof()`, `forward_kinematics(q)` (→ `Isometry3d`),
-`geometric_jacobian(q)` (6×dof), `inverse_dynamic(q,dq,ddq)`,
-`lower_jointLimit()` / `upper_jointLimit()`. `ModelFromURDF` is the
-Pinocchio-backed implementation.
+## 插件
 
-### `TaskMapping` — `task.hpp`
-User-owned strategy mapping model state to task space; must outlive the solver.
-`position_map(q, pose, *task_position)` → `x(q)`;
-`jacobian_map(q, J, *task_jacobian)` → `dx/dq` (dof columns). Both must share
-the task dimension/ordering and return `false` when unevaluable.
+- `arm_controller/ArmController`：上层控制器。读取 URDF 关节名和默认
+  `default_kp/default_kd`，每周期把状态送入 FSM，再输出
+  `position/velocity/effort/kp/kd/ki` 命令。
+- `arm_controller/SimPidController`：链式 PID 控制器。接收每关节 6 个
+  reference interface，向仿真硬件输出 `effort`。
+- `arm_controller/ArmRealInterfaces`：实机 `hardware_interface::SystemInterface`。
+  固定 6 关节，使用 libusb CDC 与 MCU 收发 packed struct 数据包。
 
-### `IKSolver` — `kinamic.hpp/.cpp`
-`IKSolver(ModelBase*, TaskMapping*)`. `solve(target, joint_pos)` runs iterative
-damped least-squares: pose → task position → error → task Jacobian → joint step
-→ per-joint/joint limits. `joint_pos` is the initial guess and the output
-(unchanged on failure). Helpers: `task_position(q)`, `jacobian(q)`. No
-task-unit, Euler-angle, or axis/dot-product logic here — that belongs in
-`TaskMapping`.
+## 主要目录
 
-### `ArmSolve` — `arm.hpp/.cpp`
-Façade over model + IKSolver: `inverse_kinamic(task_pos)`,
-`forward_kinamic(q)`, `inverse_dynamic(q, task_vel, task_acc, task_force)`
-(adds `J_task^T * task_force`), `static_force(q, tau_residual)`.
+- `controller/`：ROS 2 controller 与 hardware interface 插件实现。
+- `arm/`：机械臂控制状态机和 URDF 模型封装。
+- `lib/calculate/`：运动学、动力学、轨迹工具。
+- `lib/cdc_trans/`：USB CDC 通信封装。
+- `lib/fsm/`：轻量 FSM 基类与工厂。
+- `lib/executer/`：DAG 组件执行器实验代码，当前未接入主库。
 
-### `Trajectory` — `trajectory.hpp/.cpp`
-Point interpolation over `std::vector<Point>`:
-`add_point(point, time_from_start)`, `start(time)`, `update(time, point)`, plus
-`operator+` for accumulating points. Each segment is a quintic Bézier (≡
-quintic Hermite) matching endpoint position, velocity, and acceleration
-(missing vel/acc treated as zero), so adjacent segments are C²-continuous.
+## 计算库
 
-## Mappings
+`ArmSolve -> IKSolver -> ModelBase + TaskMapping`。
+`ModelFromURDF` 基于 Pinocchio 提供 FK、几何雅可比、RNEA 和关节限位；
+`IKSolver` 使用阻尼最小二乘迭代求 IK；
+`Trajectory` 使用五次 Hermite/Bezier 段插值位置、速度和加速度。
 
-`default6dof_task.hpp/.cpp` declares `Default6DofTaskSpaceMapping` but is a
-placeholder — pure virtual methods unimplemented.
+## 开发约定
 
-## Build
-
-Intended sources: `kinamic.cpp`, `arm.cpp`, `model_from_urdf.cpp`,
-`trajectory.cpp`. `CMakeLists.txt` still lists the deleted `solve.cpp` and does
-not yet list `arm.cpp` / `trajectory.cpp`.
-
-## Rules
-
-- Task-space semantics → `TaskMapping`; model math → `ModelBase`.
-- Update `position_map()` and `jacobian_map()` together.
-- Validate task/Jacobian dimensions at the API boundary.
-- Don't reintroduce `TaskUnit` or hard-coded Cartesian branches.
-- After changes: build `arm_controller`, run `cppcheck` and `lint_cmake`.
+- 优先保持 `TaskMapping` 承担任务空间语义，`ModelBase` 承担机器人模型数学。
+- 改任务空间时同步检查 `position_map()` 与 `jacobian_map()`。
+- 改控制器接口时同步检查 controller YAML、URDF `ros2_control` 接口和插件 XML。
+- 修改后优先构建验证：`colcon build --packages-select arm_controller`。
