@@ -115,6 +115,10 @@ controller_interface::return_type SimPidController::update_and_write_commands(
     return controller_interface::return_type::OK;
 }
 
+controller_interface::return_type SimPidController::update_reference_from_subscribers() {
+    return controller_interface::return_type::OK;
+}
+
 std::vector<hardware_interface::CommandInterface> SimPidController::on_export_reference_interfaces() {
     std::vector<hardware_interface::CommandInterface> reference_interfaces;
     reference_interfaces.reserve(joints_name_.size() * kReferenceInterfaceCount);

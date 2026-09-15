@@ -3,9 +3,9 @@
 #include <sstream>
 #include <stdexcept>
 
-ArmSolve::ArmSolve(ModelBase* model, TaskMapping* task_mapping)
+ArmSolve::ArmSolve(std::shared_ptr<ModelBase> model, std::shared_ptr<TaskMapping> task_mapping)
     : model_(model) {
-    ik_solver_ = new IKSolver(model, task_mapping);
+    ik_solver_ = std::make_shared<IKSolver>(model, task_mapping);
 }
 
 Eigen::VectorXd ArmSolve::inverse_kinamic(const Eigen::VectorXd& task_pos) {

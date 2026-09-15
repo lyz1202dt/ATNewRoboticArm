@@ -1,12 +1,12 @@
 #pragma once
 
 #include "kinamic.hpp"
-
+#include <memory>
 #include <Eigen/Dense>
 
 class ArmSolve {
 public:
-    ArmSolve(ModelBase* model, TaskMapping* task_mapping);
+    ArmSolve(std::shared_ptr<ModelBase> model, std::shared_ptr<TaskMapping> task_mapping);
 
     // 任务空间目标到关节空间解。
     Eigen::VectorXd inverse_kinamic(const Eigen::VectorXd& task_pos);
@@ -25,6 +25,6 @@ public:
                                  const Eigen::VectorXd& joint_torque_residual);
 
 private:
-    ModelBase* model_;
-    IKSolver* ik_solver_;
+    std::shared_ptr<ModelBase> model_;
+    std::shared_ptr<IKSolver> ik_solver_;
 };

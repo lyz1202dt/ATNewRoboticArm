@@ -32,7 +32,7 @@ private:
     bool started_ = false;
 };
 
-Trajectory operator+(const Trajectory& traj,Point point)
+inline Trajectory operator+(const Trajectory& traj,Point point)
 {
     Trajectory new_traj=traj;
     point.time=traj.points.back().time+point.time;
