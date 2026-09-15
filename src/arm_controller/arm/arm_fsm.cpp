@@ -143,6 +143,7 @@ bool ResetState::enter(const std::string& last_state) {
 }
 
 bool ResetState::exit(const std::string& next_state) {
+    factory->node_->set_parameter(rclcpp::Parameter("exp_state",next_state));
     return next_state == "idel";
 }
 
