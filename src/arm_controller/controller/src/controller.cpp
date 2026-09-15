@@ -19,13 +19,21 @@ ArmController::ArmController() {
 }
 
 controller_interface::CallbackReturn ArmController::on_init() {
-    auto node   = get_node();
-    fsm_factory = std::make_shared<FSMArmControlFactory>(node);
+    auto node = get_node();
 
     auto_declare<std::vector<double>>("default_kp", {});
     auto_declare<std::vector<double>>("default_kd", {});
+    auto_declare<std::vector<double>>("reset_joint_pos", {});
+    auto_declare<double>("reset_duration", 3.0);
+    auto_declare<double>("reset_tolerance", 0.01);
+    auto_declare<std::vector<std::string>>("joints", {});
     auto_declare<std::string>("urdf_path", "");
     auto_declare<std::string>("exp_state", "idel");
+
+    node->get_parameter<std::vector<std::string>>("joints", joints_name);
+
+    fsm_factory = std::make_shared<FSMArmControlFactory>(node);
+
     param_cb_ = node->add_on_set_parameters_callback([this](const std::vector<rclcpp::Parameter>& params) {
         rcl_interfaces::msg::SetParametersResult result;
         result.successful = true;
@@ -33,21 +41,33 @@ controller_interface::CallbackReturn ArmController::on_init() {
             auto name = param.get_name();
             if (name == "exp_state") {
                 fsm_factory->exp_state_name = param.as_string();
+            } else if (name == "joints") {
+                result.successful = false;
+                result.reason     = "joints cannot be changed after initialization";
+                return result;
+            } else if (name == "default_kp" || name == "default_kd" || name == "reset_joint_pos") {
+                if (param.as_double_array().size() > joints_name.size()) {
+                    result.successful = false;
+                    result.reason     = name + " size must be less than or equal to joints size";
+                    return result;
+                }
+            } else if (name == "reset_duration") {
+                if (param.as_double() <= 0.0) {
+                    result.successful = false;
+                    result.reason     = "reset_duration must be positive";
+                    return result;
+                }
+            } else if (name == "reset_tolerance") {
+                if (param.as_double() < 0.0) {
+                    result.successful = false;
+                    result.reason     = "reset_tolerance must be non-negative";
+                    return result;
+                }
             } else {
             }
         }
         return result;
     });
-
-    std::string urdf_path;
-    node->get_parameter<std::string>("urdf_path", urdf_path);
-
-    pinocchio::Model model;
-    pinocchio::urdf::buildModel(urdf_path, model);
-    joints_name.reserve(model.names.size() > 0 ? model.names.size() - 1 : 0);
-    for (std::size_t i = 1; i < model.names.size(); ++i) {
-        joints_name.push_back(model.names[i]);
-    }
 
     // 加载默认kp和kd参数
     std::vector<double> default_kp_param;
@@ -62,6 +82,11 @@ controller_interface::CallbackReturn ArmController::on_init() {
     for (std::size_t i = 0; i < std::min(default_kd.size(), default_kd_param.size()); ++i) {
         default_kd[i] = static_cast<float>(default_kd_param[i]);
     }
+
+    std::string exp_state;
+    node->get_parameter("exp_state", exp_state);
+
+    fsm_factory->exp_state_name = exp_state;
     return controller_interface::CallbackReturn::SUCCESS;
 }
 

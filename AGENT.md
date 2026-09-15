@@ -41,3 +41,16 @@
 - 改任务空间时同步检查 `position_map()` 与 `jacobian_map()`。
 - 改控制器接口时同步检查 controller YAML、URDF `ros2_control` 接口和插件 XML。
 - 修改后优先构建验证：`colcon build --packages-select arm_controller`。
+
+## ros2_control 实时约束
+
+- `ArmController::update()` 是高频实时控制路径，禁止读写 ROS 参数，禁止动态内存操作。
+- FSM 的 `run()` 必须只读已缓存数据并写控制命令，不能调用 `get_parameter()`、
+  不能构造临时 `std::vector`，不能 `resize/reserve/assign/push_back`。
+- FSM 的 `enter()` 也由 `update()` 间接调用，允许在状态切入时刷新参数值，但只能写入
+  构造函数或非实时初始化阶段已预分配好的 buffer；不能在 `enter()` 中改变容器容量。
+- FSM 构造函数或控制器初始化阶段负责读取 `joints`、确定关节数、预分配状态缓存和参数缓存。
+- `FSMArmControlFactory` 只保留 FSM 注册、共享运行态和 `node_` 等基础上下文；
+  不缓存各 FSM 私有参数。新增或删除 FSM 时，不应为了私有参数修改 Factory 成员。
+- 运行时可更新的数组参数，如 `default_kp/default_kd/reset_joint_pos`，长度必须不超过初始化时的
+  `joints` 数量，避免状态切入时触发重新分配。

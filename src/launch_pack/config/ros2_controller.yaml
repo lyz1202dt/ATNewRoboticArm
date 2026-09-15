@@ -33,3 +33,6 @@ arm_controller:
     exp_state: idel
     default_kp: [200.0, 200.0, 200.0, 20.0, 20.0, 5.0]
     default_kd: [8.0, 8.0, 8.0, 0.8, 0.8, 0.1]
+    reset_joint_pos: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    reset_duration: 3.0
+    reset_tolerance: 0.01

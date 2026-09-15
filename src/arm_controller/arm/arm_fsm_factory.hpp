@@ -35,9 +35,6 @@ public:
         set_init_state("idel");
     }
     std::string exp_state_name{"idel"};
-    std::vector<float> default_kp_;
-    std::vector<float> default_kd_;
-    std::vector<float> default_ki_;
     std::shared_ptr<ArmSolve> arm_solve_;
     std::shared_ptr<ModelBase> model_;
     std::shared_ptr<TaskMapping> task_map_;
