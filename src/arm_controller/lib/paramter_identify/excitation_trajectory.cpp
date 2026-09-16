@@ -89,11 +89,11 @@ void ExcitationTrajectory::calc_traj() {
         fourier_traj.set_coefficients(param_mat);
         if (!traj_is_available(fourier_traj, 0.005))
             continue;
-        auto ret=traj_score(fourier_traj,0.005,identifiable_parameter_num_);
-        std::cout<<"socor:"<<std::get<0>(ret)<<std::get<1>(ret)<<std::endl;
-        if(std::get<0>(ret)*0.5+std::get<1>(ret)*0.5>max_socor)
+        double ret=traj_score(fourier_traj,0.005,identifiable_parameter_num_);
+        std::cout<<"socor:"<<ret<<std::endl;
+        if(ret>max_socor)
         {
-            max_socor=std::get<0>(ret)*0.5+std::get<1>(ret)*0.5;
+            max_socor=ret;
             best_mat=param_mat;
         }
     }
@@ -137,7 +137,7 @@ bool ExcitationTrajectory::traj_is_available(const FourierTrajectory& traj, doub
     return true;
 }
 
-std::tuple<double,double>  ExcitationTrajectory::traj_score(const FourierTrajectory& traj, double dt,int identifiable_param_num) // 求激励轨迹的得分
+double  ExcitationTrajectory::traj_score(const FourierTrajectory& traj, double dt,int identifiable_param_num) // 求激励轨迹的得分
 {
     const int sample_cnt = static_cast<int>(traj.period() / dt);
     for (int i = 0; i < sample_cnt; i++) {
@@ -152,9 +152,8 @@ std::tuple<double,double>  ExcitationTrajectory::traj_score(const FourierTraject
     Eigen::JacobiSVD<Eigen::MatrixXd> svd(Y, Eigen::ComputeThinV);
     S = svd.singularValues();
 
-    double a1=S[0]/S[identifiable_param_num-1]; //条件数
-    double a2=0.0f;
+    double ret=0.0f;
     for(int i=0;i<identifiable_param_num;i++)
-        a2=a2+std::log10(S[i]);
-    return std::make_tuple(a1,a2/identifiable_param_num);
+        ret=ret+std::log10(S[i]);
+    return ret/identifiable_param_num;
 }

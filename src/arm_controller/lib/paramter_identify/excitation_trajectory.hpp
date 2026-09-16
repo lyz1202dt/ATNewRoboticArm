@@ -25,8 +25,8 @@ private:
     void calc_traj();
     bool traj_is_available(const FourierTrajectory& traj,double dt);
 
-    //奇异值条件数/总体信息量
-    std::tuple<double,double> traj_score(const FourierTrajectory& traj,double dt,int identifiable_param_num);
+    //总体信息量
+    double traj_score(const FourierTrajectory& traj,double dt,int identifiable_param_num);
 
     pinocchio::Model model_;
     pinocchio::Data data_;
