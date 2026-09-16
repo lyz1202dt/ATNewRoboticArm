@@ -19,8 +19,10 @@ public:
                          const Eigen::VectorXd& dq,
                          const Eigen::VectorXd& ddq,
                          Eigen::VectorXd* joint_torque) override;
-    const Eigen::VectorXd& lower_jointLimit() const override; 
-    const Eigen::VectorXd& upper_jointLimit() const override;
+    const Eigen::VectorXd& lower_joint_limit() const override; 
+    const Eigen::VectorXd& upper_joint_limit() const override;
+    const Eigen::VectorXd& upper_joint_vel() const override;
+    const Eigen::VectorXd& upper_joint_effort() const override;
 
 private:
     void check_vector_dimension(const Eigen::VectorXd& q) const;

@@ -15,6 +15,8 @@ public:
                                  const Eigen::VectorXd& ddq,
                                  Eigen::VectorXd* joint_torque) = 0;
 
-    virtual const Eigen::VectorXd& lower_jointLimit() const = 0; 
-    virtual const Eigen::VectorXd& upper_jointLimit() const = 0;
+    virtual const Eigen::VectorXd& lower_joint_limit() const = 0; 
+    virtual const Eigen::VectorXd& upper_joint_limit() const = 0;
+    virtual const Eigen::VectorXd& upper_joint_vel() const = 0;
+    virtual const Eigen::VectorXd& upper_joint_effort() const = 0;
 };

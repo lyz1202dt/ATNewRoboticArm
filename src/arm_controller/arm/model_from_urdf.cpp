@@ -76,12 +76,20 @@ bool ModelFromURDF::inverse_dynamic(const Eigen::VectorXd& q,
     return joint_torque->allFinite();
 }
 
-const Eigen::VectorXd& ModelFromURDF::lower_jointLimit() const {
+const Eigen::VectorXd& ModelFromURDF::lower_joint_limit() const {
     return model_.lowerPositionLimit;
 }
 
-const Eigen::VectorXd& ModelFromURDF::upper_jointLimit() const {
+const Eigen::VectorXd& ModelFromURDF::upper_joint_limit() const {
     return model_.upperPositionLimit;
+}
+
+const Eigen::VectorXd& ModelFromURDF::upper_joint_vel() const {
+    return model_.velocityLimit;
+}
+
+const Eigen::VectorXd& ModelFromURDF::upper_joint_effort() const {
+    return model_.effortLimit;
 }
 
 void ModelFromURDF::check_vector_dimension(const Eigen::VectorXd& q) const {
