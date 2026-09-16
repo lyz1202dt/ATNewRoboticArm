@@ -20,10 +20,6 @@ public:
     bool generate_is_finished();
 
     bool get_target_position(rclcpp::Duration time,Eigen::VectorXd &pos);
-    const Eigen::VectorXd& identifiable_parameters() const { return identifiable_parameters_; }
-    const Eigen::MatrixXd& identifiable_parameter_transform() const { return identifiable_parameter_transform_; }
-    const Eigen::MatrixXd& identifiable_regressor() const { return identifiable_regressor_; }
-    int identifiable_parameter_num() const { return identifiable_parameter_num_; }
 private:
     std::atomic_bool trajectory_generatefinished{false};
     void calc_traj();
