@@ -26,6 +26,7 @@ public:
     const Eigen::VectorXd& coefficients() const;
 
     Eigen::VectorXd position(double t) const;
+    bool position(double t, Eigen::VectorXd& q) const;
 
     Eigen::VectorXd velocity(double t) const;
 

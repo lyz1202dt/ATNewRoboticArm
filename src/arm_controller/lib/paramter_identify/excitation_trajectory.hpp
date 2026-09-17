@@ -51,8 +51,4 @@ private:
 
     std::shared_ptr<FourierTrajectory> best_traj;
     int traj_repeat_cnt{1};
-
-
-    //计算线程
-    std::shared_ptr<std::thread> calc_thread;
 };

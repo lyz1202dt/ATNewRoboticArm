@@ -4,11 +4,14 @@
 
 #include <any>
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include <Eigen/Dense>
 #include <rclcpp/time.hpp>
+
+#include "excitation_trajectory.hpp"
 
 class FSMArmControlFactory;
 
@@ -125,4 +128,21 @@ public:
     bool exit(const std::string& next_state) override;
     std::string check_switch() const override;
     bool run() override;
+
+private:
+    FSMArmControlFactory* factory{nullptr};
+    std::size_t joint_count_{0};
+    std::shared_ptr<ExcitationTrajectory> excitation_trajectory_;
+    std::vector<float> hold_position_;
+    std::vector<float> default_kp_;
+    std::vector<float> default_kd_;
+    std::vector<double> default_kp_param_;
+    std::vector<double> default_kd_param_;
+    Eigen::VectorXd target_position_;
+    rclcpp::Time measure_start_time_;
+    double trajectory_period_{10.0};
+    int trajectory_repeat_cnt_{1};
+    bool trajectory_ready_{false};
+    bool tracking_started_{false};
+    bool measure_done_{false};
 };

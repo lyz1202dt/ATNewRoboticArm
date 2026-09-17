@@ -45,10 +45,12 @@
 ## ros2_control 实时约束
 
 - `ArmController::update()` 是高频实时控制路径，禁止读写 ROS 参数，禁止动态内存操作。
+- FSM 的 `enter()/run()/check_switch()/exit()` 都可能由 `ArmController::update()` 间接调用，
+  因此都属于实时控制路径；状态机内需要的内存只能在构造函数或控制器非实时初始化阶段申请。
 - FSM 的 `run()` 必须只读已缓存数据并写控制命令，不能调用 `get_parameter()`、
   不能构造临时 `std::vector`，不能 `resize/reserve/assign/push_back`。
-- FSM 的 `enter()` 也由 `update()` 间接调用，允许在状态切入时刷新参数值，但只能写入
-  构造函数或非实时初始化阶段已预分配好的 buffer；不能在 `enter()` 中改变容器容量。
+- FSM 的 `enter()` 只能重置标量状态、拷贝传感器/命令值到已预分配 buffer、切换标志位；
+  不能读取 ROS 参数、创建对象、启动线程或执行可能分配内存/阻塞的计算。
 - FSM 构造函数或控制器初始化阶段负责读取 `joints`、确定关节数、预分配状态缓存和参数缓存。
 - `FSMArmControlFactory` 只保留 FSM 注册、共享运行态和 `node_` 等基础上下文；
   不缓存各 FSM 私有参数。新增或删除 FSM 时，不应为了私有参数修改 Factory 成员。

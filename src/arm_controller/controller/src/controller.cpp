@@ -27,6 +27,8 @@ controller_interface::CallbackReturn ArmController::on_init() {
     auto_declare<std::vector<double>>("reset_joint_pos", {});
     auto_declare<double>("reset_duration", 3.0);
     auto_declare<double>("reset_tolerance", 0.01);
+    auto_declare<double>("measure_trajectory_period", 10.0);
+    auto_declare<int>("measure_trajectory_repeat_cnt", 1);
     auto_declare<std::vector<std::string>>("joints", {});
     auto_declare<std::string>("urdf_path", "");
     auto_declare<std::string>("exp_state", "idel");
@@ -81,6 +83,18 @@ controller_interface::CallbackReturn ArmController::on_init() {
                 if (param.as_double() < 0.0) {
                     result.successful = false;
                     result.reason     = "reset_tolerance must be non-negative";
+                    return result;
+                }
+            } else if (name == "measure_trajectory_period") {
+                if (param.as_double() <= 0.0) {
+                    result.successful = false;
+                    result.reason     = "measure_trajectory_period must be positive";
+                    return result;
+                }
+            } else if (name == "measure_trajectory_repeat_cnt") {
+                if (param.as_int() <= 0) {
+                    result.successful = false;
+                    result.reason     = "measure_trajectory_repeat_cnt must be positive";
                     return result;
                 }
             } else {

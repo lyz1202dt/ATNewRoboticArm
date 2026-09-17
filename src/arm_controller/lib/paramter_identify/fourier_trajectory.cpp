@@ -55,7 +55,7 @@ void FourierTrajectory::set_coefficients(const Eigen::VectorXd& coefficients) {
 
 void FourierTrajectory::set_coefficients(const double* x, int n) {
     for (int i = 0; i < n; i++)
-        coefficients_(i) = x[n];
+        coefficients_(i) = x[i];
 }
 
 const Eigen::VectorXd& FourierTrajectory::coefficients() const {
@@ -87,6 +87,21 @@ Eigen::VectorXd FourierTrajectory::position(double t) const {
     }
 
     return q;
+}
+
+bool FourierTrajectory::position(double t, Eigen::VectorXd& q) const {
+    if (q.size() != dof_) {
+        return false;
+    }
+
+    q = q0_;
+    for (int k = 1; k <= harmonics_; ++k) {
+        const double phase = static_cast<double>(k) * omega_ * t;
+        q.noalias() += coefficients_.segment((k - 1) * 2 * dof_, dof_) * std::sin(phase);
+        q.noalias() += coefficients_.segment((k - 1) * 2 * dof_ + dof_, dof_) * std::cos(phase);
+    }
+
+    return true;
 }
 
 

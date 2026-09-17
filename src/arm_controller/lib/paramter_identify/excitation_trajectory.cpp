@@ -19,21 +19,23 @@ ExcitationTrajectory::ExcitationTrajectory(const std::string& urdf_path) {
     dq.resize(model_.nv);
     ddq.resize(model_.nv);
 }
+
 void ExcitationTrajectory::generate(double period, int repeat_cnt) {
-    traj_repeat_cnt=repeat_cnt;
+    traj_repeat_cnt             = repeat_cnt;
     trajectory_generatefinished = false;
-    calc_thread                 = std::make_shared<std::thread>([this,period]() {
-        calc_traj(period);
-        trajectory_generatefinished = true;
-    });
+    calc_traj(period);
+    trajectory_generatefinished = best_traj != nullptr;
 }
 bool ExcitationTrajectory::generate_is_finished() {
     return trajectory_generatefinished;
 }
 
-bool ExcitationTrajectory::get_target_position(const rclcpp::Duration &time, Eigen::VectorXd& pos) {
-    pos = best_traj->position(std::fmod(time.seconds(), best_traj->period()));
-    return true;
+bool ExcitationTrajectory::get_target_position(const rclcpp::Duration& time, Eigen::VectorXd& pos) {
+    if (best_traj == nullptr) {
+        return false;
+    }
+
+    return best_traj->position(std::fmod(time.seconds(), best_traj->period()), pos);
 }
 
 void ExcitationTrajectory::calc_traj(double peroid) {
@@ -108,7 +110,7 @@ void ExcitationTrajectory::calc_traj(double peroid) {
             return k_infeasible_cost;
         }
 
-        fourier_traj.set_coefficients(x,n);
+        fourier_traj.set_coefficients(x, n);
 
         const double violation = traj_constraint_violation(fourier_traj, k_eval_dt);
         if (violation > 0.0) {
@@ -127,7 +129,7 @@ void ExcitationTrajectory::calc_traj(double peroid) {
     const Eigen::VectorXd best_x               = cma_solutions.get_best_seen_candidate().get_x_pheno_dvec(cma_params);
     fourier_traj.set_coefficients(best_x);
 
-    best_traj=std::make_shared<FourierTrajectory>(fourier_traj);
+    best_traj = std::make_shared<FourierTrajectory>(fourier_traj);
     std::cout << "best_score:" << best_score << std::endl;
     std::cout << "best_mat" << best_mat << std::endl;
 }
