@@ -9,7 +9,7 @@ FourierTrajectory::FourierTrajectory(int dof, int harmonics, double period)
     , period_(period)
     , omega_(2.0 * M_PI / period)
     , q0_(Eigen::VectorXd::Zero(dof))
-    , coefficients_(Eigen::MatrixXd::Zero(dof, 2 * harmonics)) {
+    , coefficients_(Eigen::VectorXd::Zero(dof * 2 * harmonics)) {
 }
 
 int FourierTrajectory::dof() const {
@@ -46,7 +46,16 @@ void FourierTrajectory::set_coefficients(const Eigen::MatrixXd& coefficients) {
         throw std::invalid_argument("Invalid Fourier coefficient dimension");
     }
 
+    coefficients_ = Eigen::Map<const Eigen::VectorXd>(coefficients.data(), coefficients.size());
+}
+
+void FourierTrajectory::set_coefficients(const Eigen::VectorXd& coefficients) {
     coefficients_ = coefficients;
+}
+
+void FourierTrajectory::set_coefficients(const double* x, int n) {
+    for (int i = 0; i < n; i++)
+        coefficients_(i) = x[n];
 }
 
 const Eigen::VectorXd& FourierTrajectory::coefficients() const {

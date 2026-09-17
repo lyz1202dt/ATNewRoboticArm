@@ -62,8 +62,8 @@ bool IKSolver::solve(const Eigen::VectorXd& target, Eigen::VectorXd& joint_pos) 
 
     const int joint_count = robot_->dof();
     workspace_.solution = joint_pos;
-    const Eigen::VectorXd& lower = robot_->lower_jointLimit();
-    const Eigen::VectorXd& upper = robot_->upper_jointLimit();
+    const Eigen::VectorXd& lower = robot_->lower_joint_limit();
+    const Eigen::VectorXd& upper = robot_->upper_joint_limit();
     const bool use_joint_limits = lower.size() == joint_count && upper.size() == joint_count
         && lower.allFinite() && upper.allFinite();
 

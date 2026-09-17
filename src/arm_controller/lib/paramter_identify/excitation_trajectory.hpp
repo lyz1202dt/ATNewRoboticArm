@@ -9,24 +9,24 @@
 #include <pinocchio/multibody/data.hpp>
 #include <pinocchio/multibody/model.hpp>
 #include <pinocchio/parsers/urdf.hpp>
-#include <vector>
-#include <random>
+#include <memory>
 #include "fourier_trajectory.hpp"
 
 class ExcitationTrajectory{
 public:
     explicit ExcitationTrajectory(const std::string &urdf_path);
-    void generate(rclcpp::Duration trajectory_time,int repeat_cnt=1,float joint_vel_limit_scale=0.8,float joint_pos_limit_scale=0.8);
+    void generate(double period, int repeat_cnt);
     bool generate_is_finished();
 
-    bool get_target_position(rclcpp::Duration time,Eigen::VectorXd &pos);
+    bool get_target_position(const rclcpp::Duration &time,Eigen::VectorXd &pos);
 private:
     std::atomic_bool trajectory_generatefinished{false};
-    void calc_traj();
-    bool traj_is_available(const FourierTrajectory& traj,double dt);
+    void calc_traj(double peroid);
 
-    //总体信息量
+    //评估轨迹可行性和质量
+    bool traj_is_available(const FourierTrajectory& traj,double dt);
     double traj_score(const FourierTrajectory& traj,double dt,int identifiable_param_num);
+    double traj_constraint_violation(const FourierTrajectory& traj,double dt);
 
     pinocchio::Model model_;
     pinocchio::Data data_;
@@ -46,4 +46,13 @@ private:
     Eigen::VectorXd q, dq, ddq;
     Eigen::MatrixXd Y;
     Eigen::VectorXd S;
+    Eigen::MatrixXd best_coefficients_;
+    Eigen::MatrixXd param_mat;
+
+    FourierTrajectory best_traj;
+    int traj_repeat_cnt{1};
+
+
+    //计算线程
+    std::shared_ptr<std::thread> calc_thread;
 };

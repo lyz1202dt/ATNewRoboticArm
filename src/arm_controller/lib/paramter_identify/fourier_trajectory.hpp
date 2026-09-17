@@ -20,6 +20,8 @@ public:
      * 行数为关节数，列数为傅里叶系数[a1,b1,a2,b2,a3,b3,...]
      */
     void set_coefficients(const Eigen::MatrixXd& coefficients);
+    void set_coefficients(const Eigen::VectorXd& coefficients);
+    void set_coefficients(const double *x,int n);
 
     const Eigen::VectorXd& coefficients() const;
 

@@ -28,6 +28,18 @@ find_package(ament_index_cpp REQUIRED)
 find_package(arm_model REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
 
+set(LIBCMAES_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(LIBCMAES_BUILD_PYTHON OFF CACHE BOOL "" FORCE)
+set(LIBCMAES_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(LIBCMAES_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LIBCMAES_USE_OPENMP OFF CACHE BOOL "" FORCE)
+set(LIBCMAES_ENABLE_SURROG OFF CACHE BOOL "" FORCE)
+add_subdirectory(
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/libcmaes
+  ${CMAKE_CURRENT_BINARY_DIR}/libcmaes
+  EXCLUDE_FROM_ALL
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
@@ -55,6 +67,8 @@ add_library(arm_controller SHARED
   lib/calculate/kinamic.cpp
   lib/calculate/trajectory.cpp
   lib/cdc_trans/cdc_trans.cpp
+  lib/paramter_identify/excitation_trajectory.cpp
+  lib/paramter_identify/fourier_trajectory.cpp
 )
 
 target_include_directories(arm_controller PUBLIC
@@ -63,6 +77,7 @@ target_include_directories(arm_controller PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/calculate>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/cdc_trans>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/fsm>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/paramter_identify>
   $<INSTALL_INTERFACE:include>
 )
 
@@ -83,6 +98,7 @@ target_link_libraries(arm_controller
   Eigen3::Eigen
   pinocchio::pinocchio
   PkgConfig::LIBUSB
+  libcmaes::cmaes
 )
 
 install(TARGETS arm_controller
@@ -109,6 +125,10 @@ install(DIRECTORY lib/calculate/
 
 install(DIRECTORY lib/fsm/
   DESTINATION include/arm_controller
+  FILES_MATCHING PATTERN "*.hpp")
+
+install(DIRECTORY lib/paramter_identify/
+  DESTINATION include/arm_controller/paramter_identify
   FILES_MATCHING PATTERN "*.hpp")
 
 ament_package()
