@@ -3,8 +3,10 @@
 #include "arm_fsm_factory.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <exception>
+#include <future>
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -33,8 +35,9 @@ IDELState::IDELState(const std::string& name, std::any ctx)
     }
 }
 
-bool IDELState::enter(const std::string& last_state) {
+bool IDELState::enter(const std::string& last_state, const rclcpp::Time& time) {
     (void)last_state;
+    (void)time;
 
     if (factory == nullptr || factory->node_ == nullptr || factory->state_.size() != joint_count_
         || factory->command_.size() != joint_count_) {
@@ -68,7 +71,9 @@ std::string IDELState::check_switch() const {
     return factory->exp_state_name;
 }
 
-bool IDELState::run() {
+bool IDELState::run(const rclcpp::Time& time) {
+    (void)time;
+
     if (factory == nullptr || factory->command_.size() != joint_count_) {
         return false;
     }
@@ -122,7 +127,7 @@ ResetState::ResetState(const std::string& name, std::any ctx)
     }
 }
 
-bool ResetState::enter(const std::string& last_state) {
+bool ResetState::enter(const std::string& last_state, const rclcpp::Time& time) {
     if (factory == nullptr || factory->node_ == nullptr || last_state != "idel" || factory->state_.size() != joint_count_
         || factory->command_.size() != joint_count_) {
         return false;
@@ -132,7 +137,7 @@ bool ResetState::enter(const std::string& last_state) {
         start_joint_pos_[i] = factory->state_[i].position;
     }
 
-    reset_start_time_ = factory->node_->now();
+    reset_start_time_ = time;
     progress_         = 0.0f;
     reset_done_       = joint_count_ == 0;
     return true;
@@ -152,12 +157,12 @@ std::string ResetState::check_switch() const {
     return fsm_name_;
 }
 
-bool ResetState::run() {
+bool ResetState::run(const rclcpp::Time& time) {
     if (factory == nullptr || factory->state_.size() != joint_count_ || factory->command_.size() != joint_count_) {
         return false;
     }
 
-    const float elapsed_s = static_cast<float>((factory->node_->now() - reset_start_time_).seconds());
+    const float elapsed_s = static_cast<float>((time - reset_start_time_).seconds());
     progress_             = std::min(1.0f, elapsed_s / reset_duration_);
 
     bool joint_reached = true;
@@ -182,8 +187,9 @@ CartTrajState::CartTrajState(const std::string& name, std::any ctx)
     : FSM(name, ctx) {
 }
 
-bool CartTrajState::enter(const std::string& last_state) {
+bool CartTrajState::enter(const std::string& last_state, const rclcpp::Time& time) {
     (void)last_state;
+    (void)time;
     return true;
 }
 
@@ -196,7 +202,8 @@ std::string CartTrajState::check_switch() const {
     return fsm_name_;
 }
 
-bool CartTrajState::run() {
+bool CartTrajState::run(const rclcpp::Time& time) {
+    (void)time;
     return true;
 }
 
@@ -204,8 +211,9 @@ JointTrajState::JointTrajState(const std::string& name, std::any ctx)
     : FSM(name, ctx) {
 }
 
-bool JointTrajState::enter(const std::string& last_state) {
+bool JointTrajState::enter(const std::string& last_state, const rclcpp::Time& time) {
     (void)last_state;
+    (void)time;
     return true;
 }
 
@@ -218,7 +226,8 @@ std::string JointTrajState::check_switch() const {
     return fsm_name_;
 }
 
-bool JointTrajState::run() {
+bool JointTrajState::run(const rclcpp::Time& time) {
+    (void)time;
     return true;
 }
 
@@ -226,8 +235,9 @@ ServoState::ServoState(const std::string& name, std::any ctx)
     : FSM(name, ctx) {
 }
 
-bool ServoState::enter(const std::string& last_state) {
+bool ServoState::enter(const std::string& last_state, const rclcpp::Time& time) {
     (void)last_state;
+    (void)time;
     return true;
 }
 
@@ -240,7 +250,8 @@ std::string ServoState::check_switch() const {
     return fsm_name_;
 }
 
-bool ServoState::run() {
+bool ServoState::run(const rclcpp::Time& time) {
+    (void)time;
     return true;
 }
 
@@ -248,8 +259,9 @@ AdmittanceState::AdmittanceState(const std::string& name, std::any ctx)
     : FSM(name, ctx) {
 }
 
-bool AdmittanceState::enter(const std::string& last_state) {
+bool AdmittanceState::enter(const std::string& last_state, const rclcpp::Time& time) {
     (void)last_state;
+    (void)time;
     return true;
 }
 
@@ -262,7 +274,8 @@ std::string AdmittanceState::check_switch() const {
     return fsm_name_;
 }
 
-bool AdmittanceState::run() {
+bool AdmittanceState::run(const rclcpp::Time& time) {
+    (void)time;
     return true;
 }
 
@@ -290,7 +303,9 @@ TeachPendantState::TeachPendantState(const std::string& name, std::any ctx)
     }
 }
 
-bool TeachPendantState::enter(const std::string& last_state) {
+bool TeachPendantState::enter(const std::string& last_state, const rclcpp::Time& time) {
+    (void)time;
+
     if (factory == nullptr || factory->node_ == nullptr || last_state != "idel" || factory->state_.size() != joint_count_
         || factory->command_.size() != joint_count_) {
         return false;
@@ -310,7 +325,9 @@ std::string TeachPendantState::check_switch() const {
     return fsm_name_;
 }
 
-bool TeachPendantState::run() {
+bool TeachPendantState::run(const rclcpp::Time& time) {
+    (void)time;
+
     if (factory == nullptr || factory->node_ == nullptr || factory->arm_solve_ == nullptr
         || factory->state_.size() != joint_count_ || factory->command_.size() != joint_count_) {
         return false;
@@ -390,6 +407,7 @@ ParamterMeasureState::ParamterMeasureState(const std::string& name, std::any ctx
     factory->node_->get_parameter("default_kd", default_kd_param_);
     factory->node_->get_parameter("measure_trajectory_period", trajectory_period_);
     factory->node_->get_parameter("measure_trajectory_repeat_cnt", trajectory_repeat_cnt_);
+    factory->node_->get_parameter("measure_move_to_start_duration", move_to_start_duration_);
 
     const std::size_t param_capacity = std::max({joint_count_, default_kp_param_.size(), default_kd_param_.size()});
     default_kp_param_.reserve(param_capacity);
@@ -398,41 +416,65 @@ ParamterMeasureState::ParamterMeasureState(const std::string& name, std::any ctx
     default_kp_.resize(joint_count_);
     default_kd_.resize(joint_count_);
     target_position_.resize(joint_count_);
+    excitation_start_position_.resize(joint_count_);
+    excitation_end_position_.resize(joint_count_);
 
     trajectory_period_     = trajectory_period_ > 0.0 ? trajectory_period_ : 10.0;
     trajectory_repeat_cnt_ = trajectory_repeat_cnt_ > 0 ? trajectory_repeat_cnt_ : 1;
+    move_to_start_duration_ = move_to_start_duration_ > 0.0 ? move_to_start_duration_ : 3.0;
     for (std::size_t i = 0; i < joint_count_; ++i) {
         default_kp_[i] = i < default_kp_param_.size() ? static_cast<float>(default_kp_param_[i]) : 0.0f;
         default_kd_[i] = i < default_kd_param_.size() ? static_cast<float>(default_kd_param_[i]) : 0.0f;
     }
 
-    try {
-        excitation_trajectory_ = std::make_shared<ExcitationTrajectory>(factory->node_->get_parameter("urdf_path").as_string());
-        excitation_trajectory_->generate(trajectory_period_, trajectory_repeat_cnt_);
-        trajectory_ready_ = excitation_trajectory_->generate_is_finished();
-    } catch (const std::exception& error) {
-        RCLCPP_WARN(factory->node_->get_logger(), "Failed to generate excitation trajectory: %s", error.what());
-        excitation_trajectory_.reset();
-        trajectory_ready_ = false;
-    }
+    excitation_trajectory_ = std::make_shared<ExcitationTrajectory>(factory->node_->get_parameter("urdf_path").as_string());
 }
 
-bool ParamterMeasureState::enter(const std::string& last_state) {
+bool ParamterMeasureState::enter(const std::string& last_state, const rclcpp::Time& time) {
     if (factory == nullptr || factory->node_ == nullptr || last_state != "idel" || factory->state_.size() != joint_count_
         || factory->command_.size() != joint_count_) {
         return false;
     }
 
-    if (excitation_trajectory_ == nullptr || !trajectory_ready_) {
+    if (trajectory_generate_future_.valid()
+        && trajectory_generate_future_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+        RCLCPP_WARN(factory->node_->get_logger(), "Excitation trajectory generation is still running");
         return false;
     }
-
-    tracking_started_ = false;
-    measure_done_     = false;
+    if (trajectory_generate_future_.valid()) {
+        trajectory_generate_future_.get();
+    }
 
     for (std::size_t i = 0; i < joint_count_; ++i) {
         hold_position_[i] = factory->state_[i].position;
+        auto& command     = factory->command_[i];
+        command.position  = hold_position_[i];
+        command.velocity  = 0.0f;
+        command.torque    = 0.0f;
+        command.kp        = default_kp_[i];
+        command.kd        = default_kd_[i];
+        command.ki        = 0.0f;
     }
+
+    measure_done_                  = false;
+    trajectory_generation_failed_  = false;
+    measure_phase_                 = MeasurePhase::WaitingForTrajectory;
+    phase_start_time_              = time;
+    measure_start_time_            = time;
+    move_to_start_trajectory_      = Trajectory();
+    excitation_trajectory_         = std::make_shared<ExcitationTrajectory>(factory->node_->get_parameter("urdf_path").as_string());
+    auto trajectory                = excitation_trajectory_;
+    const auto logger              = factory->node_->get_logger();
+    const double trajectory_period = trajectory_period_;
+    const int repeat_cnt           = trajectory_repeat_cnt_;
+    trajectory_generate_future_    = std::async(std::launch::async, [this, trajectory, logger, trajectory_period, repeat_cnt]() {
+        try {
+            trajectory->generate(trajectory_period, repeat_cnt);
+        } catch (const std::exception& error) {
+            trajectory_generation_failed_ = true;
+            RCLCPP_WARN(logger, "Failed to generate excitation trajectory: %s", error.what());
+        }
+    });
 
     return true;
 }
@@ -442,31 +484,123 @@ bool ParamterMeasureState::exit(const std::string& next_state) {
 }
 
 std::string ParamterMeasureState::check_switch() const {
-    if (factory != nullptr && (measure_done_ || factory->exp_state_name == "idel")) {
+    if (factory != nullptr && measure_phase_ == MeasurePhase::HoldingEnd && factory->exp_state_name == "idel") {
         return "idel";
     }
     return fsm_name_;
 }
 
-bool ParamterMeasureState::run() {
+bool ParamterMeasureState::run(const rclcpp::Time& time) {
     if (factory == nullptr || factory->node_ == nullptr || excitation_trajectory_ == nullptr
         || factory->state_.size() != joint_count_ || factory->command_.size() != joint_count_) {
         return false;
     }
 
-    if (!tracking_started_) {
-        measure_start_time_ = factory->node_->now();
-        tracking_started_   = true;
+    if (measure_phase_ == MeasurePhase::WaitingForTrajectory) {
+        for (std::size_t i = 0; i < joint_count_; ++i) {
+            auto& command    = factory->command_[i];
+            command.position = hold_position_[i];
+            command.velocity = 0.0f;
+            command.torque   = 0.0f;
+            command.kp       = default_kp_[i];
+            command.kd       = default_kd_[i];
+            command.ki       = 0.0f;
+        }
+
+        if (trajectory_generation_failed_) {
+            return false;
+        }
+        if (!excitation_trajectory_->generate_is_finished()
+            && (!trajectory_generate_future_.valid()
+                || trajectory_generate_future_.wait_for(std::chrono::seconds(0)) != std::future_status::ready)) {
+            return true;
+        }
+        if (trajectory_generate_future_.valid()) {
+            trajectory_generate_future_.get();
+        }
+        if (!excitation_trajectory_->generate_is_finished()) {
+            return false;
+        }
+
+        const auto zero_duration = rclcpp::Duration::from_seconds(0.0);
+        const double total_duration = trajectory_period_ * static_cast<double>(trajectory_repeat_cnt_);
+        if (!excitation_trajectory_->get_target_position(zero_duration, excitation_start_position_)
+            || !excitation_trajectory_->get_target_position(rclcpp::Duration::from_seconds(total_duration), excitation_end_position_)
+            || excitation_start_position_.size() != static_cast<Eigen::Index>(joint_count_)
+            || excitation_end_position_.size() != static_cast<Eigen::Index>(joint_count_)
+            || !excitation_start_position_.allFinite() || !excitation_end_position_.allFinite()) {
+            return false;
+        }
+
+        Point start_point{
+            zero_duration,
+            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(joint_count_)),
+            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(joint_count_)),
+            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(joint_count_)),
+        };
+        for (std::size_t i = 0; i < joint_count_; ++i) {
+            start_point.pos(static_cast<Eigen::Index>(i)) = hold_position_[i];
+        }
+
+        Point end_point{
+            zero_duration,
+            excitation_start_position_,
+            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(joint_count_)),
+            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(joint_count_)),
+        };
+
+        move_to_start_trajectory_ = Trajectory();
+        move_to_start_trajectory_.add_point(start_point, zero_duration);
+        move_to_start_trajectory_.add_point(end_point, rclcpp::Duration::from_seconds(move_to_start_duration_));
+        move_to_start_trajectory_.start(time);
+        phase_start_time_ = time;
+        measure_phase_    = MeasurePhase::MovingToStart;
     }
 
-    const rclcpp::Duration elapsed = factory->node_->now() - measure_start_time_;
-    const double total_duration    = trajectory_period_ * static_cast<double>(trajectory_repeat_cnt_);
-    if (elapsed.seconds() >= total_duration) {
-        measure_done_ = true;
+    if (measure_phase_ == MeasurePhase::MovingToStart) {
+        move_to_start_trajectory_.update(time, move_to_start_point_);
+        if (move_to_start_point_.pos.size() != static_cast<Eigen::Index>(joint_count_)
+            || !move_to_start_point_.pos.allFinite()) {
+            return false;
+        }
+
+        const bool has_velocity = move_to_start_point_.vel.size() == static_cast<Eigen::Index>(joint_count_)
+                               && move_to_start_point_.vel.allFinite();
+        for (std::size_t i = 0; i < joint_count_; ++i) {
+            auto& command    = factory->command_[i];
+            command.position = static_cast<float>(move_to_start_point_.pos(static_cast<Eigen::Index>(i)));
+            command.velocity = has_velocity ? static_cast<float>(move_to_start_point_.vel(static_cast<Eigen::Index>(i))) : 0.0f;
+            command.torque   = 0.0f;
+            command.kp       = default_kp_[i];
+            command.kd       = default_kd_[i];
+            command.ki       = 0.0f;
+        }
+
+        if ((time - phase_start_time_).seconds() < move_to_start_duration_) {
+            return true;
+        }
+
+        measure_start_time_ = time;
+        measure_phase_      = MeasurePhase::ExecutingTrajectory;
+        return true;
     }
 
-    if (!excitation_trajectory_->get_target_position(elapsed, target_position_)
-        || target_position_.size() != static_cast<Eigen::Index>(joint_count_) || !target_position_.allFinite()) {
+    if (measure_phase_ == MeasurePhase::ExecutingTrajectory) {
+        const rclcpp::Duration elapsed = time - measure_start_time_;
+        const double total_duration    = trajectory_period_ * static_cast<double>(trajectory_repeat_cnt_);
+        if (elapsed.seconds() >= total_duration) {
+            target_position_ = excitation_end_position_;
+            measure_done_    = true;
+            measure_phase_   = MeasurePhase::HoldingEnd;
+        } else if (!excitation_trajectory_->get_target_position(elapsed, target_position_)
+                   || target_position_.size() != static_cast<Eigen::Index>(joint_count_) || !target_position_.allFinite()) {
+            return false;
+        }
+    } else if (measure_phase_ == MeasurePhase::HoldingEnd) {
+        target_position_ = excitation_end_position_;
+    }
+
+    if (target_position_.size() != static_cast<Eigen::Index>(joint_count_) || !target_position_.allFinite()) {
         return false;
     }
 

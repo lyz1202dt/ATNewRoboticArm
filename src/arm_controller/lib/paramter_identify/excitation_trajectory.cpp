@@ -121,7 +121,6 @@ void ExcitationTrajectory::calc_traj(double peroid) {
         if (!std::isfinite(score)) {
             return k_infeasible_cost;
         }
-
         return -score;
     };
 
@@ -130,8 +129,10 @@ void ExcitationTrajectory::calc_traj(double peroid) {
     fourier_traj.set_coefficients(best_x);
 
     best_traj = std::make_shared<FourierTrajectory>(fourier_traj);
-    std::cout << "best_score:" << best_score << std::endl;
-    std::cout << "best_mat" << best_mat << std::endl;
+    if (std::isfinite(best_score)) {
+        best_coefficients_ = best_mat;
+    }
+    std::cout << "best_x:" << best_x << std::endl;
 }
 
 bool ExcitationTrajectory::traj_is_available(const FourierTrajectory& traj, double dt) {

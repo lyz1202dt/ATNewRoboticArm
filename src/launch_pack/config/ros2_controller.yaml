@@ -39,4 +39,5 @@ arm_controller:
     reset_duration: 3.0
     reset_tolerance: 0.01
     measure_trajectory_period: 10.0
+    measure_move_to_start_duration: 3.0
     measure_trajectory_repeat_cnt: 1

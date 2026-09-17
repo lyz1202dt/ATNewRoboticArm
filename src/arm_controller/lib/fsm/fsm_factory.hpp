@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <utility>
 
+#include <rclcpp/time.hpp>
+
 #include "fsm.hpp"
 
 class FSMFactory {
@@ -24,7 +26,7 @@ public:
         current_state_name_ = name;
         return true;
     }
-    bool run() {
+    bool run(const rclcpp::Time& time) {
         auto current_state = fsm_map.find(current_state_name_);
         if (current_state == fsm_map.end() || current_state->second == nullptr) {
             return false;
@@ -34,7 +36,7 @@ public:
         if(first_run)
         {
             first_run=false;
-            current_fsm.enter("");
+            current_fsm.enter("", time);
             return true;
         }
 
@@ -47,13 +49,13 @@ public:
             bool switch_success=current_fsm.exit(next_fsm.get_name());
             if(!switch_success)
                 return false;
-            switch_success=next_fsm.enter(current_fsm.get_name());
+            switch_success=next_fsm.enter(current_fsm.get_name(), time);
             if(!switch_success)
                 return false;
             current_state_name_=next_state_name_;
             state_switch=false;
         } else {
-            bool success = current_fsm.run();
+            bool success = current_fsm.run(time);
             if (!success)
                 return false;
             const std::string next_state = current_fsm.check_switch();

@@ -3,6 +3,8 @@
 #include <string>
 #include <any>
 
+#include <rclcpp/time.hpp>
+
 class FSMFactory;
 
 class FSM {
@@ -15,8 +17,9 @@ public:
 
     const std::string& get_name() const { return fsm_name_; }
 
-    virtual bool enter(const std::string& last_state) {
+    virtual bool enter(const std::string& last_state, const rclcpp::Time& time) {
         (void)last_state;
+        (void)time;
         return true;
     }
 
@@ -29,7 +32,8 @@ public:
         return fsm_name_;
     }
 
-    virtual bool run() {
+    virtual bool run(const rclcpp::Time& time) {
+        (void)time;
         return true;
     }
 

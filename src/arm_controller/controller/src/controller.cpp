@@ -28,6 +28,7 @@ controller_interface::CallbackReturn ArmController::on_init() {
     auto_declare<double>("reset_duration", 3.0);
     auto_declare<double>("reset_tolerance", 0.01);
     auto_declare<double>("measure_trajectory_period", 10.0);
+    auto_declare<double>("measure_move_to_start_duration", 3.0);
     auto_declare<int>("measure_trajectory_repeat_cnt", 1);
     auto_declare<std::vector<std::string>>("joints", {});
     auto_declare<std::string>("urdf_path", "");
@@ -91,6 +92,12 @@ controller_interface::CallbackReturn ArmController::on_init() {
                     result.reason     = "measure_trajectory_period must be positive";
                     return result;
                 }
+            } else if (name == "measure_move_to_start_duration") {
+                if (param.as_double() <= 0.0) {
+                    result.successful = false;
+                    result.reason     = "measure_move_to_start_duration must be positive";
+                    return result;
+                }
             } else if (name == "measure_trajectory_repeat_cnt") {
                 if (param.as_int() <= 0) {
                     result.successful = false;
@@ -152,7 +159,6 @@ controller_interface::CallbackReturn ArmController::on_deactivate(const rclcpp_l
 }
 
 controller_interface::return_type ArmController::update(const rclcpp::Time& time, const rclcpp::Duration& period) {
-    (void)time;
     (void)period;
 
     for (std::size_t i = 0; i < joints_name.size(); i++) {     // 更新状态机工场的状态值
@@ -161,7 +167,7 @@ controller_interface::return_type ArmController::update(const rclcpp::Time& time
         fsm_factory->state_[i].torque   = static_cast<float>(state_interfaces_[i * 3 + 2].get_value());
     }
 
-    bool ret = fsm_factory->run();
+    bool ret = fsm_factory->run(time);
     if (!ret) {
         for (std::size_t i = 0; i < joints_name.size(); i++) { // 安全保护
             command_interfaces_[i * 6 + 0].set_value(state_interfaces_[i * 3 + 0].get_value());
