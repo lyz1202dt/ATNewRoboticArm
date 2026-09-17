@@ -1,49 +1,69 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include "fsm.hpp"
 
 class FSMFactory {
 public:
-    bool register_fsm(FSM* fsm) {
+    bool register_fsm(std::unique_ptr<FSM> fsm) {
         if (fsm == nullptr) {
             return false;
         }
-        fsm_map.emplace(fsm->get_name(), fsm);
-        return true;
+        return fsm_map.emplace(fsm->get_name(), std::move(fsm)).second;
     }
     bool set_init_state(const std::string& name) {
-        current_fsm   = fsm_map[name];
+        const auto state = fsm_map.find(name);
+        if (state == fsm_map.end()) {
+            return false;
+        }
+        current_state_name_ = name;
         return true;
     }
     bool run() {
+        auto current_state = fsm_map.find(current_state_name_);
+        if (current_state == fsm_map.end() || current_state->second == nullptr) {
+            return false;
+        }
+        auto& current_fsm = *current_state->second;
+
         if(first_run)
         {
             first_run=false;
-            current_fsm->enter("");
+            current_fsm.enter("");
             return true;
         }
 
         if (state_switch) {
-            bool switch_success=current_fsm->exit(next_fsm->get_name());
+            auto next_state = fsm_map.find(next_state_name_);
+            if (next_state == fsm_map.end() || next_state->second == nullptr) {
+                return false;
+            }
+            auto& next_fsm = *next_state->second;
+            bool switch_success=current_fsm.exit(next_fsm.get_name());
             if(!switch_success)
                 return false;
-            switch_success=next_fsm->enter(current_fsm->get_name());
+            switch_success=next_fsm.enter(current_fsm.get_name());
             if(!switch_success)
                 return false;
-            current_fsm=next_fsm;
+            current_state_name_=next_state_name_;
             state_switch=false;
         } else {
-            bool success = current_fsm->run();
+            bool success = current_fsm.run();
             if (!success)
                 return false;
-            const std::string next_state = current_fsm->check_switch();
-            if(next_state!=current_fsm->get_name())
+            const std::string next_state = current_fsm.check_switch();
+            if(next_state!=current_fsm.get_name())
             {
-                next_fsm  = fsm_map[next_state];
+                const auto state = fsm_map.find(next_state);
+                if (state == fsm_map.end() || state->second == nullptr) {
+                    return false;
+                }
+                next_state_name_ = next_state;
                 state_switch=true;
             } 
         }
@@ -54,8 +74,8 @@ public:
 private:
     bool first_run{true};
     bool state_switch{false};
-    FSM* next_fsm{nullptr};
-    FSM* current_fsm{nullptr};
+    std::string next_state_name_;
+    std::string current_state_name_;
     std::string last_state_name;
-    std::unordered_map<std::string, FSM*> fsm_map;
+    std::unordered_map<std::string, std::unique_ptr<FSM>> fsm_map;
 };

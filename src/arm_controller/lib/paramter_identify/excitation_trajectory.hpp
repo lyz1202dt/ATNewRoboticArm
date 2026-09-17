@@ -49,7 +49,7 @@ private:
     Eigen::MatrixXd best_coefficients_;
     Eigen::MatrixXd param_mat;
 
-    FourierTrajectory best_traj;
+    std::shared_ptr<FourierTrajectory> best_traj;
     int traj_repeat_cnt{1};
 
 

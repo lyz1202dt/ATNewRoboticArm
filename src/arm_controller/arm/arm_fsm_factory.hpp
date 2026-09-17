@@ -24,14 +24,14 @@ public:
         task_map_=std::make_shared<Default6DofTaskSpaceMapping>();
         arm_solve_=std::make_shared<ArmSolve>(model_,task_map_);    //加载机器人模型
 
-        register_fsm(new IDELState("idel", this));                  // 机械臂锁定在当前位置
-        register_fsm(new ResetState("reset", this));                // 机械臂复位
-        register_fsm(new CartTrajState("cart_traj", this));         // 执行笛卡尔轨迹
-        register_fsm(new JointTrajState("joint_traj", this));       //执行关节空间轨迹
-        register_fsm(new ServoState("servo", this));                //伺服动作，接收速度指令，将指令积分作为期望位置
-        register_fsm(new AdmittanceState("admittance", this));      //导纳控制
-        register_fsm(new TeachPendantState("teach_pendant", this));   //示教器，可外力拖动，可配置带阻尼，重力补偿
-        register_fsm(new TeachPendantState("measuer", this));       //系统参数辨识
+        register_fsm(std::make_unique<IDELState>("idel", this));                  // 机械臂锁定在当前位置
+        register_fsm(std::make_unique<ResetState>("reset", this));                // 机械臂复位
+        register_fsm(std::make_unique<CartTrajState>("cart_traj", this));         // 执行笛卡尔轨迹
+        register_fsm(std::make_unique<JointTrajState>("joint_traj", this));       //执行关节空间轨迹
+        register_fsm(std::make_unique<ServoState>("servo", this));                //伺服动作，接收速度指令，将指令积分作为期望位置
+        register_fsm(std::make_unique<AdmittanceState>("admittance", this));      //导纳控制
+        register_fsm(std::make_unique<TeachPendantState>("teach_pendant", this));   //示教器，可外力拖动，可配置带阻尼，重力补偿
+        register_fsm(std::make_unique<TeachPendantState>("measuer", this));       //系统参数辨识
 
         set_init_state("idel");
     }

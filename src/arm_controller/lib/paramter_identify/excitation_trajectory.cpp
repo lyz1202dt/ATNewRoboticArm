@@ -32,16 +32,14 @@ bool ExcitationTrajectory::generate_is_finished() {
 }
 
 bool ExcitationTrajectory::get_target_position(const rclcpp::Duration &time, Eigen::VectorXd& pos) {
-    pos = best_traj.position(std::fmod(time.seconds(), best_traj.period()));
+    pos = best_traj->position(std::fmod(time.seconds(), best_traj->period()));
     return true;
 }
 
 void ExcitationTrajectory::calc_traj(double peroid) {
 
     constexpr int k_harmonics           = 3;
-    constexpr double k_period           = 4.0;
     constexpr double k_eval_dt          = 0.01;
-    constexpr double k_final_eval_dt    = 0.005;
     constexpr int k_max_fevals          = 600;
     constexpr int k_lambda              = 24;
     constexpr double k_coeff_bound      = 2.0;
@@ -129,7 +127,7 @@ void ExcitationTrajectory::calc_traj(double peroid) {
     const Eigen::VectorXd best_x               = cma_solutions.get_best_seen_candidate().get_x_pheno_dvec(cma_params);
     fourier_traj.set_coefficients(best_x);
 
-    best_traj=fourier_traj;
+    best_traj=std::make_shared<FourierTrajectory>(fourier_traj);
     std::cout << "best_score:" << best_score << std::endl;
     std::cout << "best_mat" << best_mat << std::endl;
 }
