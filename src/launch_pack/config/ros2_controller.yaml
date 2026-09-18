@@ -47,5 +47,5 @@ arm_controller:
     measure_end_effector_x_upper_limit: .inf
     measure_end_effector_y_lower_limit: -.inf
     measure_end_effector_y_upper_limit: .inf
-    measure_end_effector_z_lower_limit: -.inf
+    measure_end_effector_z_lower_limit: 0.1
     measure_end_effector_z_upper_limit: .inf
