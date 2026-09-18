@@ -13,7 +13,8 @@ find_package(sensor_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MotorCmd.msg"
   "msg/MotorState.msg"
-
+  "msg/ArmCommand.msg"
+  "msg/Point.msg"
   DEPENDENCIES builtin_interfaces std_msgs geometry_msgs sensor_msgs
 )
 ament_export_dependencies(rosidl_default_runtime)

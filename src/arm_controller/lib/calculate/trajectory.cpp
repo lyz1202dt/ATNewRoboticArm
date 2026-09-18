@@ -9,28 +9,29 @@ namespace {
 // 两点时间间隔过小视为无效段，避免除零。
 constexpr double kMinSegmentDuration = 1e-9;
 
-}  // namespace
+} // namespace
 
-Trajectory::Trajectory() = default;
+Trajectory::Trajectory(int dof)
+    : copy(dof) {
+}
 
 void Trajectory::add_point(const Point& point, rclcpp::Duration time_from_start) {
     if (!points.empty() && point.pos.size() != points.front().pos.size()) {
         throw std::invalid_argument("Trajectory point position dimension mismatch");
     }
 
-    Point copy = point;
+    copy      = point;
     copy.time = time_from_start;
 
     // 按相对起点的时刻保持 points 单调有序，update 依赖该顺序。
-    const auto insert_position = std::lower_bound(
-        points.begin(), points.end(), copy,
-        [](const Point& lhs, const Point& rhs) { return lhs.time < rhs.time; });
+    const auto insert_position =
+        std::lower_bound(points.begin(), points.end(), copy, [](const Point& lhs, const Point& rhs) { return lhs.time < rhs.time; });
     points.insert(insert_position, std::move(copy));
 }
 
 void Trajectory::start(rclcpp::Time time) {
     start_time_point_ = time;
-    started_ = true;
+    started_          = true;
 }
 
 void Trajectory::stop() {
@@ -61,8 +62,8 @@ void Trajectory::update(rclcpp::Time time, Point& point) {
     }
 
     const double start_seconds = points[segment].time.seconds();
-    const double end_seconds = points[segment + 1].time.seconds();
-    const double duration = end_seconds - start_seconds;
+    const double end_seconds   = points[segment + 1].time.seconds();
+    const double duration      = end_seconds - start_seconds;
     if (duration <= kMinSegmentDuration) {
         point = points[segment];
         return;
@@ -79,8 +80,8 @@ void Trajectory::sample_segment(const Point& a, const Point& b, double s, Point*
     const int dimension = a.pos.size();
 
     // 五次 Bernstein 基函数。
-    const double u = s;
-    const double v = 1.0 - u;
+    const double u  = s;
+    const double v  = 1.0 - u;
     const double u2 = u * u;
     const double u3 = u2 * u;
     const double u4 = u3 * u;
@@ -88,19 +89,19 @@ void Trajectory::sample_segment(const Point& a, const Point& b, double s, Point*
     const double v3 = v2 * v;
     const double v4 = v3 * v;
 
-    const double w0 = v4 * v;          // (1-u)^5
-    const double w1 = 5.0 * u * v4;    // 5u(1-u)^4
-    const double w2 = 10.0 * u2 * v3;  // 10u^2(1-u)^3
-    const double w3 = 10.0 * u3 * v2;  // 10u^3(1-u)^2
-    const double w4 = 5.0 * u4 * v;    // 5u^4(1-u)
-    const double w5 = u4 * u;          // u^5
+    const double w0 = v4 * v;         // (1-u)^5
+    const double w1 = 5.0 * u * v4;   // 5u(1-u)^4
+    const double w2 = 10.0 * u2 * v3; // 10u^2(1-u)^3
+    const double w3 = 10.0 * u3 * v2; // 10u^3(1-u)^2
+    const double w4 = 5.0 * u4 * v;   // 5u^4(1-u)
+    const double w5 = u4 * u;         // u^5
 
     // 一阶导（对 s）：B'(s) = 5 · 四次贝塞尔，控制点为 Δi = B_{i+1} - B_i。
-    const double z0 = v4;             // (1-u)^4
-    const double z1 = 4.0 * u * v3;   // 4u(1-u)^3
-    const double z2 = 6.0 * u2 * v2;  // 6u^2(1-u)^2
-    const double z3 = 4.0 * u3 * v;   // 4u^3(1-u)
-    const double z4 = u4;             // u^4
+    const double z0 = v4;            // (1-u)^4
+    const double z1 = 4.0 * u * v3;  // 4u(1-u)^3
+    const double z2 = 6.0 * u2 * v2; // 6u^2(1-u)^2
+    const double z3 = 4.0 * u3 * v;  // 4u^3(1-u)
+    const double z4 = u4;            // u^4
 
     // 二阶导（对 s）：B''(s) = 20 · 三次贝塞尔，控制点为 Δ_{i+1} - Δ_i。
     const double y0 = v3;           // (1-u)^3
@@ -122,7 +123,7 @@ void Trajectory::sample_segment(const Point& a, const Point& b, double s, Point*
     const bool has_b_vel = b.vel.size() == dimension;
     const bool has_a_acc = a.acc.size() == dimension;
     const bool has_b_acc = b.acc.size() == dimension;
-    const double t = duration;
+    const double t       = duration;
 
     for (int i = 0; i < dimension; ++i) {
         const double p0 = a.pos(i);
@@ -148,7 +149,6 @@ void Trajectory::sample_segment(const Point& a, const Point& b, double s, Point*
 
         out->pos(i) = w0 * b0 + w1 * b1 + w2 * b2 + w3 * b3 + w4 * b4 + w5 * b5;
         out->vel(i) = 5.0 * (z0 * d0 + z1 * d1 + z2 * d2 + z3 * d3 + z4 * d4) / duration;
-        out->acc(i) = 20.0 * (y0 * (d1 - d0) + y1 * (d2 - d1) + y2 * (d3 - d2) + y3 * (d4 - d3))
-                    / (duration * duration);
+        out->acc(i) = 20.0 * (y0 * (d1 - d0) + y1 * (d2 - d1) + y2 * (d3 - d2) + y3 * (d4 - d3)) / (duration * duration);
     }
 }

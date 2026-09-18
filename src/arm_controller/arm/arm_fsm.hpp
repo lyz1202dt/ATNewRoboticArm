@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fourier_trajectory.hpp"
 #include "fsm.hpp"
 
 #include <any>
@@ -71,16 +72,31 @@ public:
     bool exit(const std::string& next_state) override;
     std::string check_switch() const override;
     bool run(const rclcpp::Time& time) override;
+
 };
 
 class JointTrajState : public FSM {
 public:
+    enum class TrajPhase {
+        STOP,   //从enter进入时处于此状态，等待queue非空，并且其状态为执行关节空间轨迹
+        MOVING, //轨迹执行
+    };
+
     JointTrajState(const std::string& name, std::any ctx);
 
+    
     bool enter(const std::string& last_state, const rclcpp::Time& time) override;
     bool exit(const std::string& next_state) override;
     std::string check_switch() const override;
     bool run(const rclcpp::Time& time) override;
+private:
+    Point point;
+    TrajPhase state;
+    Trajectory traj;
+    Eigen::VectorXd torque;
+    std::vector<float> default_kp_;
+    std::vector<float> default_kd_;
+    FSMArmControlFactory* factory{nullptr};
 };
 
 class ServoState : public FSM {
@@ -146,12 +162,7 @@ private:
     std::unique_ptr<ParamterIdentify> paramter_identify_;
     std::atomic_bool trajectory_generation_failed_{false};
     Trajectory move_to_start_trajectory_;
-    Point move_to_start_point_{
-        rclcpp::Duration::from_seconds(0.0),
-        Eigen::VectorXd(),
-        Eigen::VectorXd(),
-        Eigen::VectorXd(),
-    };
+    Point move_to_start_point_;
     std::vector<float> hold_position_;
     std::vector<float> default_kp_;
     std::vector<float> default_kd_;

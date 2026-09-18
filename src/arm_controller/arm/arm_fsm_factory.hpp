@@ -9,12 +9,15 @@
 #include "task.hpp"
 
 #include <memory>
+#include <rclcpp/qos.hpp>
 #include <string>
 #include <vector>
 
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <robot_msgs/msg/motor_cmd.hpp>
 #include <robot_msgs/msg/motor_state.hpp>
+#include <robot_msgs/msg/arm_command.hpp>
+#include <queue>
 
 class FSMArmControlFactory : public FSMFactory {
 public:
@@ -23,6 +26,10 @@ public:
         model_=std::make_shared<ModelFromURDF>(node->get_parameter("urdf_path").as_string(),"link6");
         task_map_=std::make_shared<Default6DofTaskSpaceMapping>();
         arm_solve_=std::make_shared<ArmSolve>(model_,task_map_);    //加载机器人模型
+
+        node_->create_subscription<robot_msgs::msg::ArmCommand>("arm", 10, [this](const robot_msgs::msg::ArmCommand &msg){
+            cmd_queue.push(std::make_tuple(node_->get_clock()->now(),msg));
+        });
 
         register_fsm(std::make_unique<IDELState>("idel", this));                  // 机械臂锁定在当前位置
         register_fsm(std::make_unique<ResetState>("reset", this));                // 机械臂复位
@@ -35,6 +42,9 @@ public:
 
         set_init_state("idel");
     }
+
+    std::queue<std::tuple<rclcpp::Time,robot_msgs::msg::ArmCommand>> cmd_queue;
+
     std::string exp_state_name{"idel"};
     std::shared_ptr<ArmSolve> arm_solve_;
     std::shared_ptr<ModelBase> model_;
