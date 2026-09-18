@@ -544,6 +544,7 @@ bool ParamterMeasureState::run(const rclcpp::Time& time) {
         move_to_start_trajectory_.add_point(end_point, rclcpp::Duration::from_seconds(move_to_start_duration_));
         move_to_start_trajectory_.start(time);
         phase_start_time_ = time;
+        RCLCPP_INFO(factory->node_->get_logger(),"最小可辨识参数数量为:%d",excitation_trajectory_->get_available_param_num());
         measure_phase_    = MeasurePhase::MovingToStart;
     }
 

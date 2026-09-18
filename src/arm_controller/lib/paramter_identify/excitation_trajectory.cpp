@@ -69,7 +69,7 @@ void ExcitationTrajectory::calc_func() {
     constexpr double k_initial_sigma    = 0.7;
     constexpr double k_infeasible_cost  = 1000.0;
     constexpr double k_violation_weight = 1000.0;
-    
+
 
     while (1) {
         std::unique_lock<std::mutex> lock(start_calc_mtx_);
@@ -106,12 +106,13 @@ void ExcitationTrajectory::calc_func() {
 
         Eigen::JacobiSVD<Eigen::MatrixXd> svd(Y, Eigen::ComputeFullV);
         const Eigen::VectorXd singular_values = svd.singularValues();
-        int identifiable_parameter_num_       = 0;
+        identifiable_parameter_num_           = 0;
         for (int i = 0; i < singular_values.size(); i++) {
             if (singular_values[i] > SVD_ZERO * singular_values[0]) {
                 identifiable_parameter_num_++;
             }
         }
+
 
         if (identifiable_parameter_num_ <= 0) {
             std::cerr << "No identifiable dynamic parameters found, skip excitation trajectory optimization." << std::endl;
@@ -137,7 +138,7 @@ void ExcitationTrajectory::calc_func() {
         double best_score = -std::numeric_limits<double>::infinity();
         Eigen::MatrixXd best_mat;
 
-        libcmaes::FitFunc objective = [this, &fourier_traj, identifiable_parameter_num_, &best_score, &best_mat, k_eval_dt,
+        libcmaes::FitFunc objective = [this, &fourier_traj, &best_score, &best_mat, k_eval_dt,
                                        k_infeasible_cost, k_violation_weight](const double* x, const int n) {
             if (n != fourier_traj.dof() * 2 * fourier_traj.harmonics()) {
                 return k_infeasible_cost;
@@ -170,6 +171,10 @@ void ExcitationTrajectory::calc_func() {
         trajectory_generatefailed   = best_traj == nullptr;
         trajectory_generatefinished = true;
     }
+}
+
+int ExcitationTrajectory::get_available_param_num()const {
+    return identifiable_parameter_num_;
 }
 
 double ExcitationTrajectory::traj_constraint_violation(const FourierTrajectory& traj, double dt) {

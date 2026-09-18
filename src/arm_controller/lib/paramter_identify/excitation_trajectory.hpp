@@ -26,6 +26,9 @@ public:
     bool generate_failed() const;
 
     bool get_target_position(const rclcpp::Duration &time,Eigen::VectorXd &pos);
+
+    int get_available_param_num() const;
+    
 private:
     std::atomic_bool trajectory_generatefinished{false};
     std::atomic_bool trajectory_generatefailed{false};
@@ -54,6 +57,8 @@ private:
     Eigen::VectorXd S;
     Eigen::MatrixXd best_coefficients_;
     Eigen::MatrixXd param_mat;
+
+    int identifiable_parameter_num_{0};
 
     std::mutex start_calc_mtx_;
     std::condition_variable start_calc_cv_;
