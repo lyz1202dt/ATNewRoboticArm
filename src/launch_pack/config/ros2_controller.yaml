@@ -43,3 +43,9 @@ arm_controller:
     measure_trajectory_repeat_cnt: 1
     measure_csv_file_path: /tmp/measured_for_identification.csv
     measure_record_sample_rate: 500.0
+    measure_end_effector_x_lower_limit: -.inf
+    measure_end_effector_x_upper_limit: .inf
+    measure_end_effector_y_lower_limit: -.inf
+    measure_end_effector_y_upper_limit: .inf
+    measure_end_effector_z_lower_limit: -.inf
+    measure_end_effector_z_upper_limit: .inf

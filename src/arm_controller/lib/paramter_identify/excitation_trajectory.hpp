@@ -10,6 +10,7 @@
 #include <thread>
 
 #include <Eigen/Dense>
+#include <limits>
 #include <pinocchio/algorithm/regressor.hpp>
 #include <pinocchio/multibody/data.hpp>
 #include <pinocchio/multibody/model.hpp>
@@ -19,7 +20,7 @@
 
 class ExcitationTrajectory{
 public:
-    explicit ExcitationTrajectory(const std::string &urdf_path);
+    explicit ExcitationTrajectory(const std::string& urdf_path);
     ~ExcitationTrajectory();
     void generate(double period, int repeat_cnt);
     bool generate_is_finished();
@@ -28,6 +29,13 @@ public:
     bool get_target_position(const rclcpp::Duration &time,Eigen::VectorXd &pos);
 
     int get_available_param_num() const;
+
+    double end_effector_x_lower_limit{-std::numeric_limits<double>::infinity()};
+    double end_effector_x_upper_limit{std::numeric_limits<double>::infinity()};
+    double end_effector_y_lower_limit{-std::numeric_limits<double>::infinity()};
+    double end_effector_y_upper_limit{std::numeric_limits<double>::infinity()};
+    double end_effector_z_lower_limit{-std::numeric_limits<double>::infinity()};
+    double end_effector_z_upper_limit{std::numeric_limits<double>::infinity()};
     
 private:
     std::atomic_bool trajectory_generatefinished{false};
@@ -39,6 +47,7 @@ private:
 
     pinocchio::Model model_;
     pinocchio::Data data_;
+    pinocchio::FrameIndex end_effector_frame_id_{0};
 
 
     //参数

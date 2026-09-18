@@ -409,6 +409,18 @@ ParamterMeasureState::ParamterMeasureState(const std::string& name, std::any ctx
     factory->node_->get_parameter("measure_move_to_start_duration", move_to_start_duration_);
     factory->node_->get_parameter("measure_csv_file_path", measure_csv_file_path_);
     factory->node_->get_parameter("measure_record_sample_rate", measure_record_sample_rate_);
+    double end_effector_x_lower_limit;
+    double end_effector_x_upper_limit;
+    double end_effector_y_lower_limit;
+    double end_effector_y_upper_limit;
+    double end_effector_z_lower_limit;
+    double end_effector_z_upper_limit;
+    factory->node_->get_parameter("measure_end_effector_x_lower_limit", end_effector_x_lower_limit);
+    factory->node_->get_parameter("measure_end_effector_x_upper_limit", end_effector_x_upper_limit);
+    factory->node_->get_parameter("measure_end_effector_y_lower_limit", end_effector_y_lower_limit);
+    factory->node_->get_parameter("measure_end_effector_y_upper_limit", end_effector_y_upper_limit);
+    factory->node_->get_parameter("measure_end_effector_z_lower_limit", end_effector_z_lower_limit);
+    factory->node_->get_parameter("measure_end_effector_z_upper_limit", end_effector_z_upper_limit);
 
     const std::size_t param_capacity = std::max({joint_count_, default_kp_param_.size(), default_kd_param_.size()});
     default_kp_param_.reserve(param_capacity);
@@ -437,6 +449,12 @@ ParamterMeasureState::ParamterMeasureState(const std::string& name, std::any ctx
 
     const std::string urdf_path = factory->node_->get_parameter("urdf_path").as_string();
     excitation_trajectory_      = std::make_shared<ExcitationTrajectory>(urdf_path);
+    excitation_trajectory_->end_effector_x_lower_limit = end_effector_x_lower_limit;
+    excitation_trajectory_->end_effector_x_upper_limit = end_effector_x_upper_limit;
+    excitation_trajectory_->end_effector_y_lower_limit = end_effector_y_lower_limit;
+    excitation_trajectory_->end_effector_y_upper_limit = end_effector_y_upper_limit;
+    excitation_trajectory_->end_effector_z_lower_limit = end_effector_z_lower_limit;
+    excitation_trajectory_->end_effector_z_upper_limit = end_effector_z_upper_limit;
     paramter_identify_          = std::make_unique<ParamterIdentify>(urdf_path);
     const auto record_capacity  = static_cast<int>(
         std::ceil(trajectory_period_ * static_cast<double>(trajectory_repeat_cnt_) * measure_record_sample_rate_)) + 2;

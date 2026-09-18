@@ -10,7 +10,9 @@
 #include <pinocchio/parsers/urdf.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <exception>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -32,6 +34,12 @@ controller_interface::CallbackReturn ArmController::on_init() {
     auto_declare<int>("measure_trajectory_repeat_cnt", 1);
     auto_declare<std::string>("measure_csv_file_path", "/tmp/measured_for_identification.csv");
     auto_declare<double>("measure_record_sample_rate", 500.0);
+    auto_declare<double>("measure_end_effector_x_lower_limit", -std::numeric_limits<double>::infinity());
+    auto_declare<double>("measure_end_effector_x_upper_limit", std::numeric_limits<double>::infinity());
+    auto_declare<double>("measure_end_effector_y_lower_limit", -std::numeric_limits<double>::infinity());
+    auto_declare<double>("measure_end_effector_y_upper_limit", std::numeric_limits<double>::infinity());
+    auto_declare<double>("measure_end_effector_z_lower_limit", -std::numeric_limits<double>::infinity());
+    auto_declare<double>("measure_end_effector_z_upper_limit", std::numeric_limits<double>::infinity());
     auto_declare<std::vector<std::string>>("joints", {});
     auto_declare<std::string>("urdf_path", "");
     auto_declare<std::string>("exp_state", "idel");
@@ -110,6 +118,17 @@ controller_interface::CallbackReturn ArmController::on_init() {
                 if (param.as_double() <= 0.0) {
                     result.successful = false;
                     result.reason     = "measure_record_sample_rate must be positive";
+                    return result;
+                }
+            } else if (name == "measure_end_effector_x_lower_limit"
+                       || name == "measure_end_effector_x_upper_limit"
+                       || name == "measure_end_effector_y_lower_limit"
+                       || name == "measure_end_effector_y_upper_limit"
+                       || name == "measure_end_effector_z_lower_limit"
+                       || name == "measure_end_effector_z_upper_limit") {
+                if (std::isnan(param.as_double())) {
+                    result.successful = false;
+                    result.reason     = name + " must not be NaN";
                     return result;
                 }
             } else {

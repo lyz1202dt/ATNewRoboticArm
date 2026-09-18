@@ -9,17 +9,24 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <vector>
 
 #include <libcmaes/cmaes.h>
+#include <pinocchio/algorithm/frames.hpp>
 
-ExcitationTrajectory::ExcitationTrajectory(const std::string& urdf_path)
-    : calc_thread_([this]() { calc_func(); }) {
+ExcitationTrajectory::ExcitationTrajectory(const std::string& urdf_path) {
     pinocchio::urdf::buildModel(urdf_path, model_);
     data_ = pinocchio::Data(model_);
+    if (!model_.existFrame("link6")) {
+        throw std::runtime_error("The URDF model does not contain the end-effector frame: link6");
+    }
+    end_effector_frame_id_ = model_.getFrameId("link6");
+
     q.resize(model_.nq);
     dq.resize(model_.nv);
     ddq.resize(model_.nv);
+    calc_thread_ = std::thread([this]() { calc_func(); });
 }
 
 ExcitationTrajectory::~ExcitationTrajectory() {
@@ -216,6 +223,40 @@ double ExcitationTrajectory::traj_constraint_violation(const FourierTrajectory& 
             const double velocity_limit = model_.velocityLimit[j];
             if (std::isfinite(velocity_limit) && velocity_limit > 0.0 && std::fabs(dq[j]) > velocity_limit) {
                 const double normalized_violation = (std::fabs(dq[j]) - velocity_limit) / velocity_limit;
+                violation += normalized_violation * normalized_violation;
+            }
+        }
+
+        pinocchio::framesForwardKinematics(model_, data_, q);
+        const Eigen::Vector3d& end_effector_position = data_.oMf[end_effector_frame_id_].translation();
+        if (!end_effector_position.allFinite()) {
+            return std::numeric_limits<double>::infinity();
+        }
+        const double lower_limits[] = {
+            end_effector_x_lower_limit,
+            end_effector_y_lower_limit,
+            end_effector_z_lower_limit,
+        };
+        const double upper_limits[] = {
+            end_effector_x_upper_limit,
+            end_effector_y_upper_limit,
+            end_effector_z_upper_limit,
+        };
+        for (std::size_t axis = 0; axis < 3; ++axis) {
+            const double lower = lower_limits[axis];
+            const double upper = upper_limits[axis];
+            if (std::isnan(lower) || std::isnan(upper) || lower > upper
+                || (std::isinf(lower) && lower > 0.0) || (std::isinf(upper) && upper < 0.0)) {
+                return std::numeric_limits<double>::infinity();
+            }
+            const double range = std::isfinite(lower) && std::isfinite(upper) ? std::max(upper - lower, 1e-6) : 1.0;
+            if (std::isfinite(lower) && end_effector_position[static_cast<Eigen::Index>(axis)] < lower) {
+                const double normalized_violation =
+                    (lower - end_effector_position[static_cast<Eigen::Index>(axis)]) / range;
+                violation += normalized_violation * normalized_violation;
+            } else if (std::isfinite(upper) && end_effector_position[static_cast<Eigen::Index>(axis)] > upper) {
+                const double normalized_violation =
+                    (end_effector_position[static_cast<Eigen::Index>(axis)] - upper) / range;
                 violation += normalized_violation * normalized_violation;
             }
         }
