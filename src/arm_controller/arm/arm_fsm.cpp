@@ -14,6 +14,105 @@
 #include <robot_msgs/msg/arm_command.hpp>
 #include <robot_msgs/msg/detail/arm_command__struct.hpp>
 
+namespace {
+
+// 单条轨迹的最大点数。load_trajectory_from_command 依赖各 FSM 的 traj 预分配容量不小于它，
+// 以便在 run() 中复用预分配 buffer（clear + add_point），避免实时路径内重新分配内存。
+constexpr int kMaxTrajectoryPoints = 20;
+
+int model_dof_from_context(std::any ctx) {
+    auto* factory = std::any_cast<FSMArmControlFactory*>(ctx);
+    if (factory == nullptr || factory->model_ == nullptr) {
+        return 0;
+    }
+    return factory->model_->dof();
+}
+
+bool fill_point_from_msg(const robot_msgs::msg::Point& msg, std::size_t dimension, Point* point) {
+    if (point == nullptr || msg.pos.size() != dimension) {
+        return false;
+    }
+    if ((!msg.vel.empty() && msg.vel.size() != dimension) || (!msg.acc.empty() && msg.acc.size() != dimension)) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < dimension; ++i) {
+        const auto index  = static_cast<Eigen::Index>(i);
+        point->pos(index) = msg.pos[i];
+        point->vel(index) = msg.vel.empty() ? 0.0 : msg.vel[i];
+        point->acc(index) = msg.acc.empty() ? 0.0 : msg.acc[i];
+    }
+
+    return point->pos.allFinite() && point->vel.allFinite() && point->acc.allFinite();
+}
+
+bool load_trajectory_from_command(const robot_msgs::msg::ArmCommand& cmd, std::size_t dimension, Point* point, Trajectory* traj) {
+    if (point == nullptr || traj == nullptr || dimension == 0 || cmd.points.empty() || cmd.points.size() != cmd.seconds.size()
+        || cmd.points.size() > traj->capacity()) {
+        return false;
+    }
+
+    traj->clear();
+    for (std::size_t i = 0; i < cmd.points.size(); ++i) {
+        if (cmd.seconds[i] < 0.0 || !std::isfinite(cmd.seconds[i]) || !fill_point_from_msg(cmd.points[i], dimension, point)) {
+            return false;
+        }
+        if (!traj->add_point(*point, rclcpp::Duration::from_seconds(cmd.seconds[i]))) {
+            return false;
+        }
+    }
+
+    return traj->size() > 0;
+}
+
+void hold_current_joint_position(
+    FSMArmControlFactory* factory, std::size_t joint_count, const std::vector<float>& default_kp, const std::vector<float>& default_kd) {
+    if (factory == nullptr || factory->state_.size() != joint_count || factory->command_.size() != joint_count
+        || default_kp.size() != joint_count || default_kd.size() != joint_count) {
+        return;
+    }
+
+    for (std::size_t i = 0; i < joint_count; ++i) {
+        auto& command    = factory->command_[i];
+        command.position = factory->state_[i].position;
+        command.velocity = 0.0f;
+        command.torque   = 0.0f;
+        command.kp       = default_kp[i];
+        command.kd       = default_kd[i];
+        command.ki       = 0.0f;
+    }
+}
+
+void load_default_gains(
+    FSMArmControlFactory* factory, std::size_t joint_count, std::vector<double>* default_kp_param, std::vector<double>* default_kd_param,
+    std::vector<float>* default_kp, std::vector<float>* default_kd) {
+    if (factory == nullptr || factory->node_ == nullptr || default_kp_param == nullptr || default_kd_param == nullptr
+        || default_kp == nullptr || default_kd == nullptr) {
+        return;
+    }
+
+    factory->node_->get_parameter("default_kp", *default_kp_param);
+    factory->node_->get_parameter("default_kd", *default_kd_param);
+
+    const std::size_t param_capacity = std::max({joint_count, default_kp_param->size(), default_kd_param->size()});
+    default_kp_param->reserve(param_capacity);
+    default_kd_param->reserve(param_capacity);
+    default_kp->resize(joint_count);
+    default_kd->resize(joint_count);
+    for (std::size_t i = 0; i < joint_count; ++i) {
+        (*default_kp)[i] = i < default_kp_param->size() ? static_cast<float>((*default_kp_param)[i]) : 0.0f;
+        (*default_kd)[i] = i < default_kd_param->size() ? static_cast<float>((*default_kd_param)[i]) : 0.0f;
+    }
+}
+
+bool trajectory_finished(const Trajectory& traj, const rclcpp::Time& start_time, const rclcpp::Time& time) {
+    // points 是预分配的定长池，不能直接取 points.back()/points.empty()；
+    // 必须通过 Trajectory 的 size()/back() 接口按实际已加入的点数（index）判断。
+    return !traj.empty() && (time - start_time) >= traj.back().time;
+}
+
+} // namespace
+
 IDELState::IDELState(const std::string& name, std::any ctx)
     : FSM(name, ctx)
     , factory(std::any_cast<FSMArmControlFactory*>(ctx)) {
@@ -188,87 +287,227 @@ bool ResetState::run(const rclcpp::Time& time) {
 }
 
 CartTrajState::CartTrajState(const std::string& name, std::any ctx)
-    : FSM(name, ctx) {
+    : FSM(name, ctx)
+    , point(6)
+    , traj(6, kMaxTrajectoryPoints)
+    , factory(std::any_cast<FSMArmControlFactory*>(ctx)) {
+    joint_count_ = model_dof_from_context(ctx);
+    task_dof_    = 6;
+    joint_pos_.resize(static_cast<Eigen::Index>(joint_count_));
+    torque_.resize(static_cast<Eigen::Index>(joint_count_));
+    task_force_.setZero(static_cast<Eigen::Index>(task_dof_));
+    load_default_gains(factory, joint_count_, &default_kp_param_, &default_kd_param_, &default_kp_, &default_kd_);
 }
 
 bool CartTrajState::enter(const std::string& last_state, const rclcpp::Time& time) {
     (void)last_state;
     (void)time;
+
+    if (factory == nullptr || factory->node_ == nullptr || factory->arm_solve_ == nullptr || factory->state_.size() != joint_count_
+        || factory->command_.size() != joint_count_ || default_kp_.size() != joint_count_ || default_kd_.size() != joint_count_) {
+        return false;
+    }
+
+    state = TrajPhase::STOP;
+    traj.stop();
+    hold_current_joint_position(factory, joint_count_, default_kp_, default_kd_);
     return true;
 }
 
 bool CartTrajState::exit(const std::string& next_state) {
     (void)next_state;
-    return true;
-}
-
-std::string CartTrajState::check_switch() const {
-    return fsm_name_;
-}
-
-bool CartTrajState::run(const rclcpp::Time& time) {
-    (void)time;
-    return true;
-}
-
-JointTrajState::JointTrajState(const std::string& name, std::any ctx)
-    : FSM(name, ctx)
-    , factory(std::any_cast<FSMArmControlFactory*>(ctx))
-    , point(factory->model_->dof()) {
-    torque.resize(factory->model_->dof());
-}
-
-bool JointTrajState::enter(const std::string& last_state, const rclcpp::Time& time) {
-    (void)last_state;
-    (void)time;
+    traj.stop();
     state = TrajPhase::STOP;
     return true;
 }
 
-bool JointTrajState::exit(const std::string& next_state) {
-    (void)next_state;
-    return true;
-}
-
-std::string JointTrajState::check_switch() const {
+std::string CartTrajState::check_switch() const {
+    if (factory == nullptr) {
+        return fsm_name_;
+    }
     if (!factory->cmd_queue.empty()) {
         const std::string exp_state_name = std::get<1>(factory->cmd_queue.front()).exp_state;
         if (exp_state_name != fsm_name_) {
             return exp_state_name;
         }
+    } else if (state == TrajPhase::STOP && !factory->exp_state_name.empty() && factory->exp_state_name != fsm_name_) {
+        return factory->exp_state_name;
+    }
+    return fsm_name_;
+}
+
+bool CartTrajState::run(const rclcpp::Time& time) {
+    if (factory == nullptr || factory->node_ == nullptr || factory->arm_solve_ == nullptr || factory->state_.size() != joint_count_
+        || factory->command_.size() != joint_count_) {
+        return false;
+    }
+
+    if (state == TrajPhase::STOP) {
+        if (factory->cmd_queue.empty() || std::get<1>(factory->cmd_queue.front()).exp_state != fsm_name_) {
+            hold_current_joint_position(factory, joint_count_, default_kp_, default_kd_);
+            return true;
+        }
+
+        const auto& cmd = std::get<1>(factory->cmd_queue.front());
+        if (!load_trajectory_from_command(cmd, task_dof_, &point, &traj)) {
+            RCLCPP_WARN(factory->node_->get_logger(), "Invalid Cartesian trajectory command");
+            return false;
+        }
+        traj_start_time_ = time;
+        traj.start(time);
+        state = TrajPhase::MOVING;
+    }
+
+    if (state == TrajPhase::MOVING) {
+        traj.update(time, point);
+        if (point.pos.size() != static_cast<Eigen::Index>(task_dof_) || point.vel.size() != static_cast<Eigen::Index>(task_dof_)
+            || point.acc.size() != static_cast<Eigen::Index>(task_dof_) || !point.pos.allFinite() || !point.vel.allFinite()
+            || !point.acc.allFinite()) {
+            return false;
+        }
+
+        try {
+            if (!factory->arm_solve_->inverse_kinamic(point.pos, &joint_pos_)
+                || joint_pos_.size() != static_cast<Eigen::Index>(joint_count_) || !joint_pos_.allFinite()
+                || !factory->arm_solve_->inverse_dynamic(joint_pos_, point.vel, point.acc, task_force_, &torque_)
+                || torque_.size() != static_cast<Eigen::Index>(joint_count_) || !torque_.allFinite()) {
+                return false;
+            }
+        } catch (const std::exception& error) {
+            RCLCPP_WARN_THROTTLE(
+                factory->node_->get_logger(), *factory->node_->get_clock(), 1000, "Cartesian trajectory solve failed: %s", error.what());
+            return false;
+        }
+
+        for (std::size_t i = 0; i < joint_count_; ++i) {
+            const auto index = static_cast<Eigen::Index>(i);
+            auto& command    = factory->command_[i];
+            command.position = static_cast<float>(joint_pos_(index));
+            command.velocity = 0.0f;
+            command.torque   = static_cast<float>(torque_(index));
+            command.kp       = default_kp_[i];
+            command.kd       = default_kd_[i];
+            command.ki       = 0.0f;
+        }
+
+        if (trajectory_finished(traj, traj_start_time_, time)) {
+            traj.stop();
+            if (!factory->cmd_queue.empty() && std::get<1>(factory->cmd_queue.front()).exp_state == fsm_name_) {
+                factory->cmd_queue.pop();
+            }
+            state = TrajPhase::STOP;
+        }
+    }
+
+    return true;
+}
+
+JointTrajState::JointTrajState(const std::string& name, std::any ctx)
+    : FSM(name, ctx)
+    , point(model_dof_from_context(ctx))
+    , traj(model_dof_from_context(ctx), kMaxTrajectoryPoints)
+    , factory(std::any_cast<FSMArmControlFactory*>(ctx)) {
+    joint_count_ = model_dof_from_context(ctx);
+    torque.resize(static_cast<Eigen::Index>(joint_count_));
+    load_default_gains(factory, joint_count_, &default_kp_param_, &default_kd_param_, &default_kp_, &default_kd_);
+}
+
+bool JointTrajState::enter(const std::string& last_state, const rclcpp::Time& time) {
+    (void)last_state;
+    (void)time;
+
+    if (factory == nullptr || factory->node_ == nullptr || factory->model_ == nullptr || factory->state_.size() != joint_count_
+        || factory->command_.size() != joint_count_ || default_kp_.size() != joint_count_ || default_kd_.size() != joint_count_) {
+        return false;
+    }
+
+    state = TrajPhase::STOP;
+    traj.stop();
+    hold_current_joint_position(factory, joint_count_, default_kp_, default_kd_);
+    return true;
+}
+
+bool JointTrajState::exit(const std::string& next_state) {
+    (void)next_state;
+    traj.stop();
+    state = TrajPhase::STOP;
+    return true;
+}
+
+std::string JointTrajState::check_switch() const {
+    if (factory == nullptr) {
+        return fsm_name_;
+    }
+    if (!factory->cmd_queue.empty()) {
+        const std::string exp_state_name = std::get<1>(factory->cmd_queue.front()).exp_state;
+        if (exp_state_name != fsm_name_) {
+            return exp_state_name;
+        }
+    } else if (state == TrajPhase::STOP && !factory->exp_state_name.empty() && factory->exp_state_name != fsm_name_) {
+        return factory->exp_state_name;
     }
     return fsm_name_;
 }
 
 bool JointTrajState::run(const rclcpp::Time& time) {
-    if (state == TrajPhase::STOP) {
-        if (!factory->cmd_queue.empty()) {
-            auto const& cmd = std::get<1>(factory->cmd_queue.front());
-            if (cmd.exp_state == fsm_name_) {
-                for (int j = 0; j < cmd.points.size(); j++) {
-                    for (int i = 0; i < cmd.points[j].pos.size(); i++) {
-                        point.pos[i] = cmd.points[j].pos[i];
-                        point.vel[i] = cmd.points[j].vel[i];
-                        point.acc[i] = cmd.points[j].acc[i];
-                    }
-                    traj.add_point(point, rclcpp::Duration(std::chrono::duration<double>(cmd.seconds[j])));
-                }
-            }
-        }
-        state = TrajPhase::MOVING;
-        traj.start(time);
-    } else if (state == TrajPhase::MOVING) {
+    if (factory == nullptr || factory->node_ == nullptr || factory->model_ == nullptr || factory->state_.size() != joint_count_
+        || factory->command_.size() != joint_count_) {
+        return false;
+    }
 
+    if (state == TrajPhase::STOP) {
+        if (factory->cmd_queue.empty() || std::get<1>(factory->cmd_queue.front()).exp_state != fsm_name_) {
+            hold_current_joint_position(factory, joint_count_, default_kp_, default_kd_);
+            return true;
+        }
+
+        auto const& cmd = std::get<1>(factory->cmd_queue.front());
+        if (!load_trajectory_from_command(cmd, joint_count_, &point, &traj)) {
+            RCLCPP_WARN(factory->node_->get_logger(), "Invalid joint trajectory command");
+            return false;
+        }
+        traj_start_time_ = time;
+        state            = TrajPhase::MOVING;
+        traj.start(time);
+    }
+
+    if (state == TrajPhase::MOVING) {
         traj.update(time, point);
-        factory->model_->inverse_dynamic(point.pos, point.vel, point.acc, &torque);
-        for (std::size_t i = 0; i < factory->model_->dof(); ++i) {
+        if (point.pos.size() != static_cast<Eigen::Index>(joint_count_) || point.vel.size() != static_cast<Eigen::Index>(joint_count_)
+            || point.acc.size() != static_cast<Eigen::Index>(joint_count_) || !point.pos.allFinite() || !point.vel.allFinite()
+            || !point.acc.allFinite()) {
+            return false;
+        }
+
+        try {
+            if (!factory->model_->inverse_dynamic(point.pos, point.vel, point.acc, &torque)
+                || torque.size() != static_cast<Eigen::Index>(joint_count_) || !torque.allFinite()) {
+                return false;
+            }
+        } catch (const std::exception& error) {
+            RCLCPP_WARN_THROTTLE(
+                factory->node_->get_logger(), *factory->node_->get_clock(), 1000, "Joint trajectory inverse dynamics failed: %s",
+                error.what());
+            return false;
+        }
+
+        for (std::size_t i = 0; i < joint_count_; ++i) {
+            const auto index = static_cast<Eigen::Index>(i);
             auto& command    = factory->command_[i];
-            command.position = factory->state_[i].position;
-            command.velocity = 0.0f;
-            command.torque   = torque[i];
+            command.position = static_cast<float>(point.pos(index));
+            command.velocity = static_cast<float>(point.vel(index));
+            command.torque   = static_cast<float>(torque(index));
             command.kp       = default_kp_[i];
             command.kd       = default_kd_[i];
-            command.ki = 0.0f;
+            command.ki       = 0.0f;
+        }
+
+        if (trajectory_finished(traj, traj_start_time_, time)) {
+            traj.stop();
+            if (!factory->cmd_queue.empty() && std::get<1>(factory->cmd_queue.front()).exp_state == fsm_name_) {
+                factory->cmd_queue.pop();
+            }
+            state = TrajPhase::STOP;
         }
     }
     return true;
@@ -426,7 +665,8 @@ bool TeachPendantState::run(const rclcpp::Time& time) {
 
 ParamterMeasureState::ParamterMeasureState(const std::string& name, std::any ctx)
     : FSM(name, ctx)
-    , factory(std::any_cast<FSMArmControlFactory*>(ctx)) {
+    , factory(std::any_cast<FSMArmControlFactory*>(ctx))
+    , move_to_start_trajectory_(factory->model_->dof(), 4) {
     if (factory == nullptr || factory->node_ == nullptr) {
         return;
     }
@@ -466,6 +706,12 @@ ParamterMeasureState::ParamterMeasureState(const std::string& name, std::any ctx
     measured_position_.resize(joint_count_);
     measured_velocity_.resize(joint_count_);
     measured_torque_.resize(joint_count_);
+    start_point_.pos.resize(joint_count_);
+    start_point_.vel.resize(joint_count_);
+    start_point_.acc.resize(joint_count_);
+    end_point_.pos.resize(joint_count_);
+    end_point_.vel.resize(joint_count_);
+    end_point_.acc.resize(joint_count_);
 
     trajectory_period_          = trajectory_period_ > 0.0 ? trajectory_period_ : 10.0;
     trajectory_repeat_cnt_      = trajectory_repeat_cnt_ > 0 ? trajectory_repeat_cnt_ : 1;
@@ -521,7 +767,6 @@ bool ParamterMeasureState::enter(const std::string& last_state, const rclcpp::Ti
     measure_phase_                = MeasurePhase::WaitingForTrajectory;
     phase_start_time_             = time;
     measure_start_time_           = time;
-    move_to_start_trajectory_     = Trajectory();
     excitation_trajectory_->generate(trajectory_period_, trajectory_repeat_cnt_);
 
     return true;
@@ -572,26 +817,21 @@ bool ParamterMeasureState::run(const rclcpp::Time& time) {
             return false;
         }
 
-        Point start_point{
-            zero_duration,
-            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(joint_count_)),
-            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(joint_count_)),
-            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(joint_count_)),
-        };
+        start_point_.time = zero_duration;
+        end_point_.time   = zero_duration;
+
         for (std::size_t i = 0; i < joint_count_; ++i) {
-            start_point.pos(static_cast<Eigen::Index>(i)) = hold_position_[i];
+            start_point_.pos(static_cast<Eigen::Index>(i)) = hold_position_[i];
         }
+        start_point_.vel.setZero();
+        start_point_.acc.setZero();
 
-        Point end_point{
-            zero_duration,
-            excitation_start_position_,
-            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(joint_count_)),
-            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(joint_count_)),
-        };
+        end_point_.pos = excitation_start_position_;
+        end_point_.vel.setZero();
+        end_point_.acc.setZero();
 
-        move_to_start_trajectory_ = Trajectory();
-        move_to_start_trajectory_.add_point(start_point, zero_duration);
-        move_to_start_trajectory_.add_point(end_point, rclcpp::Duration::from_seconds(move_to_start_duration_));
+        move_to_start_trajectory_.add_point(start_point_, zero_duration);
+        move_to_start_trajectory_.add_point(end_point_, rclcpp::Duration::from_seconds(move_to_start_duration_));
         move_to_start_trajectory_.start(time);
         phase_start_time_ = time;
         RCLCPP_INFO(factory->node_->get_logger(), "最小可辨识参数数量为:%d", excitation_trajectory_->get_available_param_num());

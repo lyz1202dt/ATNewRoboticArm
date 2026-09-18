@@ -66,6 +66,11 @@ private:
 
 class CartTrajState : public FSM {
 public:
+    enum class TrajPhase {
+        STOP,
+        MOVING,
+    };
+
     CartTrajState(const std::string& name, std::any ctx);
 
     bool enter(const std::string& last_state, const rclcpp::Time& time) override;
@@ -73,6 +78,21 @@ public:
     std::string check_switch() const override;
     bool run(const rclcpp::Time& time) override;
 
+private:
+    Point point;
+    TrajPhase state{TrajPhase::STOP};
+    Trajectory traj;
+    rclcpp::Time traj_start_time_;
+    Eigen::VectorXd joint_pos_;
+    Eigen::VectorXd torque_;
+    Eigen::VectorXd task_force_;
+    std::vector<float> default_kp_;
+    std::vector<float> default_kd_;
+    std::vector<double> default_kp_param_;
+    std::vector<double> default_kd_param_;
+    std::size_t joint_count_{0};
+    std::size_t task_dof_{6};
+    FSMArmControlFactory* factory{nullptr};
 };
 
 class JointTrajState : public FSM {
@@ -91,11 +111,15 @@ public:
     bool run(const rclcpp::Time& time) override;
 private:
     Point point;
-    TrajPhase state;
+    TrajPhase state{TrajPhase::STOP};
     Trajectory traj;
+    rclcpp::Time traj_start_time_;
     Eigen::VectorXd torque;
     std::vector<float> default_kp_;
     std::vector<float> default_kd_;
+    std::vector<double> default_kp_param_;
+    std::vector<double> default_kd_param_;
+    std::size_t joint_count_{0};
     FSMArmControlFactory* factory{nullptr};
 };
 
@@ -163,6 +187,8 @@ private:
     std::atomic_bool trajectory_generation_failed_{false};
     Trajectory move_to_start_trajectory_;
     Point move_to_start_point_;
+    Point start_point_;   // run() 内构造 move_to_start 轨迹起点用的预分配 buffer
+    Point end_point_;     // run() 内构造 move_to_start 轨迹终点用的预分配 buffer
     std::vector<float> hold_position_;
     std::vector<float> default_kp_;
     std::vector<float> default_kd_;

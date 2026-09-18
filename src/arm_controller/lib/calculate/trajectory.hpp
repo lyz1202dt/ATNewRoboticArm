@@ -7,12 +7,26 @@
 
 class Point {
 public:
+    Point()
+        : time(std::chrono::nanoseconds(0)) {
+    }
+
     explicit Point(int dof)
         : time(std::chrono::nanoseconds(0)) {
             pos.resize(dof);
             vel.resize(dof);
             acc.resize(dof);
     };
+
+    Point(const rclcpp::Duration& time_from_start,
+          const Eigen::VectorXd& position,
+          const Eigen::VectorXd& velocity,
+          const Eigen::VectorXd& acceleration)
+        : time(time_from_start)
+        , pos(position)
+        , vel(velocity)
+        , acc(acceleration) {
+    }
 
     rclcpp::Duration time;
     Eigen::VectorXd pos;
@@ -22,12 +36,18 @@ public:
 
 class Trajectory {
 public:
-    explicit Trajectory(int dof);
-    void add_point(const Point& point, rclcpp::Duration time_from_start);
+    Trajectory(int dof,int max_point_num);
+    bool add_point(const Point& point, rclcpp::Duration time_from_start);
 
     void start(rclcpp::Time time);
     void stop();
     void update(rclcpp::Time time, Point& point);
+    void clear();
+    [[nodiscard]] std::size_t size() const;
+    [[nodiscard]] std::size_t capacity() const;
+    [[nodiscard]] bool empty() const;
+    [[nodiscard]] const Point& front() const;
+    [[nodiscard]] const Point& back() const;
     std::vector<Point> points;
 
 private:
@@ -39,11 +59,5 @@ private:
     rclcpp::Time start_time_point_;
     bool started_ = false;
     Point copy;
+    std::size_t index{0};
 };
-
-inline Trajectory operator+(const Trajectory& traj, Point point) {
-    Trajectory new_traj = traj;
-    point.time          = traj.points.back().time + point.time;
-    new_traj.points.emplace_back(point);
-    return new_traj;
-}

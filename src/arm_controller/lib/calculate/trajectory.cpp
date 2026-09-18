@@ -11,22 +11,22 @@ constexpr double kMinSegmentDuration = 1e-9;
 
 } // namespace
 
-Trajectory::Trajectory(int dof)
+Trajectory::Trajectory(int dof, int max_point_num)
     : copy(dof) {
+    points.assign(static_cast<std::size_t>(max_point_num), Point(dof));
 }
 
-void Trajectory::add_point(const Point& point, rclcpp::Duration time_from_start) {
-    if (!points.empty() && point.pos.size() != points.front().pos.size()) {
-        throw std::invalid_argument("Trajectory point position dimension mismatch");
+bool Trajectory::add_point(const Point& point, rclcpp::Duration time_from_start) {
+    if (index >= points.size() || points.empty() || point.pos.size() != points.front().pos.size()) {
+        return false;
     }
 
     copy      = point;
     copy.time = time_from_start;
 
-    // 按相对起点的时刻保持 points 单调有序，update 依赖该顺序。
-    const auto insert_position =
-        std::lower_bound(points.begin(), points.end(), copy, [](const Point& lhs, const Point& rhs) { return lhs.time < rhs.time; });
-    points.insert(insert_position, std::move(copy));
+    points[index] = copy;
+    index++;
+    return true;
 }
 
 void Trajectory::start(rclcpp::Time time) {
@@ -38,26 +38,51 @@ void Trajectory::stop() {
     started_ = false;
 }
 
+void Trajectory::clear() {
+    index    = 0;
+    started_ = false;
+}
+
+std::size_t Trajectory::size() const {
+    return index;
+}
+
+std::size_t Trajectory::capacity() const {
+    return points.size();
+}
+
+bool Trajectory::empty() const {
+    return index == 0;
+}
+
+const Point& Trajectory::front() const {
+    return points.front();
+}
+
+const Point& Trajectory::back() const {
+    return points[index - 1];
+}
+
 void Trajectory::update(rclcpp::Time time, Point& point) {
-    if (!started_ || points.empty()) {
+    if (!started_ || empty()) {
         return;
     }
 
     const rclcpp::Duration elapsed = time - start_time_point_;
 
     // 起始点之前与终止点之后保持端点（夹持）。
-    if (elapsed <= points.front().time) {
-        point = points.front();
+    if (elapsed <= front().time) {
+        point = front();
         return;
     }
-    if (elapsed >= points.back().time) {
-        point = points.back();
+    if (elapsed >= back().time) {
+        point = back();
         return;
     }
 
     // 找到包含 elapsed 的段 [segment, segment + 1]。
     size_t segment = 0;
-    while (segment + 1 < points.size() && points[segment + 1].time <= elapsed) {
+    while (segment + 1 < size() && points[segment + 1].time <= elapsed) {
         ++segment;
     }
 
