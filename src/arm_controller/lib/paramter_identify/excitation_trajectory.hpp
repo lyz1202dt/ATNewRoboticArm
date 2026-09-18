@@ -1,30 +1,36 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
 #include <rclcpp/duration.hpp>
 #include <rclcpp/time.hpp>
 #include <string>
+#include <thread>
+
 #include <Eigen/Dense>
 #include <pinocchio/algorithm/regressor.hpp>
 #include <pinocchio/multibody/data.hpp>
 #include <pinocchio/multibody/model.hpp>
 #include <pinocchio/parsers/urdf.hpp>
-#include <memory>
+
 #include "fourier_trajectory.hpp"
 
 class ExcitationTrajectory{
 public:
     explicit ExcitationTrajectory(const std::string &urdf_path);
+    ~ExcitationTrajectory();
     void generate(double period, int repeat_cnt);
     bool generate_is_finished();
+    bool generate_failed() const;
 
     bool get_target_position(const rclcpp::Duration &time,Eigen::VectorXd &pos);
 private:
     std::atomic_bool trajectory_generatefinished{false};
-    void calc_traj(double peroid);
+    std::atomic_bool trajectory_generatefailed{false};
 
     //评估轨迹可行性和质量
-    bool traj_is_available(const FourierTrajectory& traj,double dt);
     double traj_score(const FourierTrajectory& traj,double dt,int identifiable_param_num);
     double traj_constraint_violation(const FourierTrajectory& traj,double dt);
 
@@ -49,6 +55,15 @@ private:
     Eigen::MatrixXd best_coefficients_;
     Eigen::MatrixXd param_mat;
 
+    std::mutex start_calc_mtx_;
+    std::condition_variable start_calc_cv_;
+    bool start_calc_flag{false};
+    std::atomic_bool exit_thread{false};
+    void calc_func();
+
     std::shared_ptr<FourierTrajectory> best_traj;
     int traj_repeat_cnt{1};
+    double period_s{10.0};
+
+    std::thread calc_thread_;
 };

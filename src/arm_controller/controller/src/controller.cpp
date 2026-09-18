@@ -30,6 +30,8 @@ controller_interface::CallbackReturn ArmController::on_init() {
     auto_declare<double>("measure_trajectory_period", 10.0);
     auto_declare<double>("measure_move_to_start_duration", 3.0);
     auto_declare<int>("measure_trajectory_repeat_cnt", 1);
+    auto_declare<std::string>("measure_csv_file_path", "/tmp/measured_for_identification.csv");
+    auto_declare<double>("measure_record_sample_rate", 500.0);
     auto_declare<std::vector<std::string>>("joints", {});
     auto_declare<std::string>("urdf_path", "");
     auto_declare<std::string>("exp_state", "idel");
@@ -102,6 +104,12 @@ controller_interface::CallbackReturn ArmController::on_init() {
                 if (param.as_int() <= 0) {
                     result.successful = false;
                     result.reason     = "measure_trajectory_repeat_cnt must be positive";
+                    return result;
+                }
+            } else if (name == "measure_record_sample_rate") {
+                if (param.as_double() <= 0.0) {
+                    result.successful = false;
+                    result.reason     = "measure_record_sample_rate must be positive";
                     return result;
                 }
             } else {

@@ -5,7 +5,6 @@
 #include <any>
 #include <atomic>
 #include <cstddef>
-#include <future>
 #include <memory>
 #include <string>
 #include <vector>
@@ -14,6 +13,7 @@
 #include <rclcpp/time.hpp>
 
 #include "excitation_trajectory.hpp"
+#include "paramter_identify.hpp"
 #include "trajectory.hpp"
 
 class FSMArmControlFactory;
@@ -143,8 +143,8 @@ private:
     FSMArmControlFactory* factory{nullptr};
     std::size_t joint_count_{0};
     std::shared_ptr<ExcitationTrajectory> excitation_trajectory_;
+    std::unique_ptr<ParamterIdentify> paramter_identify_;
     std::atomic_bool trajectory_generation_failed_{false};
-    std::future<void> trajectory_generate_future_;
     Trajectory move_to_start_trajectory_;
     Point move_to_start_point_{
         rclcpp::Duration::from_seconds(0.0),
@@ -160,11 +160,17 @@ private:
     Eigen::VectorXd target_position_;
     Eigen::VectorXd excitation_start_position_;
     Eigen::VectorXd excitation_end_position_;
+    Eigen::VectorXd measured_position_;
+    Eigen::VectorXd measured_velocity_;
+    Eigen::VectorXd measured_torque_;
     rclcpp::Time measure_start_time_;
     rclcpp::Time phase_start_time_;
+    std::string measure_csv_file_path_{"/tmp/measured_for_identification.csv"};
     double trajectory_period_{10.0};
     double move_to_start_duration_{3.0};
+    double measure_record_sample_rate_{500.0};
     int trajectory_repeat_cnt_{1};
     bool measure_done_{false};
+    bool csv_save_requested_{false};
     MeasurePhase measure_phase_{MeasurePhase::HoldingEnd};
 };

@@ -69,6 +69,7 @@ add_library(arm_controller SHARED
   lib/cdc_trans/cdc_trans.cpp
   lib/paramter_identify/excitation_trajectory.cpp
   lib/paramter_identify/fourier_trajectory.cpp
+  lib/paramter_identify/paramter_identify.cpp
 )
 
 target_include_directories(arm_controller PUBLIC

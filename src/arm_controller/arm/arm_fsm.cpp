@@ -6,7 +6,6 @@
 #include <chrono>
 #include <cmath>
 #include <exception>
-#include <future>
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -408,6 +407,8 @@ ParamterMeasureState::ParamterMeasureState(const std::string& name, std::any ctx
     factory->node_->get_parameter("measure_trajectory_period", trajectory_period_);
     factory->node_->get_parameter("measure_trajectory_repeat_cnt", trajectory_repeat_cnt_);
     factory->node_->get_parameter("measure_move_to_start_duration", move_to_start_duration_);
+    factory->node_->get_parameter("measure_csv_file_path", measure_csv_file_path_);
+    factory->node_->get_parameter("measure_record_sample_rate", measure_record_sample_rate_);
 
     const std::size_t param_capacity = std::max({joint_count_, default_kp_param_.size(), default_kd_param_.size()});
     default_kp_param_.reserve(param_capacity);
@@ -418,31 +419,39 @@ ParamterMeasureState::ParamterMeasureState(const std::string& name, std::any ctx
     target_position_.resize(joint_count_);
     excitation_start_position_.resize(joint_count_);
     excitation_end_position_.resize(joint_count_);
+    measured_position_.resize(joint_count_);
+    measured_velocity_.resize(joint_count_);
+    measured_torque_.resize(joint_count_);
 
-    trajectory_period_     = trajectory_period_ > 0.0 ? trajectory_period_ : 10.0;
-    trajectory_repeat_cnt_ = trajectory_repeat_cnt_ > 0 ? trajectory_repeat_cnt_ : 1;
-    move_to_start_duration_ = move_to_start_duration_ > 0.0 ? move_to_start_duration_ : 3.0;
+    trajectory_period_          = trajectory_period_ > 0.0 ? trajectory_period_ : 10.0;
+    trajectory_repeat_cnt_      = trajectory_repeat_cnt_ > 0 ? trajectory_repeat_cnt_ : 1;
+    move_to_start_duration_     = move_to_start_duration_ > 0.0 ? move_to_start_duration_ : 3.0;
+    measure_record_sample_rate_ = measure_record_sample_rate_ > 0.0 ? measure_record_sample_rate_ : 500.0;
+    if (measure_csv_file_path_.empty()) {
+        measure_csv_file_path_ = "/tmp/measured_for_identification.csv";
+    }
     for (std::size_t i = 0; i < joint_count_; ++i) {
         default_kp_[i] = i < default_kp_param_.size() ? static_cast<float>(default_kp_param_[i]) : 0.0f;
         default_kd_[i] = i < default_kd_param_.size() ? static_cast<float>(default_kd_param_[i]) : 0.0f;
     }
 
-    excitation_trajectory_ = std::make_shared<ExcitationTrajectory>(factory->node_->get_parameter("urdf_path").as_string());
+    const std::string urdf_path = factory->node_->get_parameter("urdf_path").as_string();
+    excitation_trajectory_      = std::make_shared<ExcitationTrajectory>(urdf_path);
+    paramter_identify_          = std::make_unique<ParamterIdentify>(urdf_path);
+    const auto record_capacity  = static_cast<int>(
+        std::ceil(trajectory_period_ * static_cast<double>(trajectory_repeat_cnt_) * measure_record_sample_rate_)) + 2;
+    paramter_identify_->application_memory(record_capacity, static_cast<int>(joint_count_));
 }
 
 bool ParamterMeasureState::enter(const std::string& last_state, const rclcpp::Time& time) {
     if (factory == nullptr || factory->node_ == nullptr || last_state != "idel" || factory->state_.size() != joint_count_
-        || factory->command_.size() != joint_count_) {
+        || factory->command_.size() != joint_count_ || excitation_trajectory_ == nullptr || paramter_identify_ == nullptr) {
         return false;
     }
 
-    if (trajectory_generate_future_.valid()
-        && trajectory_generate_future_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-        RCLCPP_WARN(factory->node_->get_logger(), "Excitation trajectory generation is still running");
+    if (!paramter_identify_->reset_recording()) {
+        RCLCPP_WARN(factory->node_->get_logger(), "Previous parameter identification CSV save is still running");
         return false;
-    }
-    if (trajectory_generate_future_.valid()) {
-        trajectory_generate_future_.get();
     }
 
     for (std::size_t i = 0; i < joint_count_; ++i) {
@@ -458,23 +467,12 @@ bool ParamterMeasureState::enter(const std::string& last_state, const rclcpp::Ti
 
     measure_done_                  = false;
     trajectory_generation_failed_  = false;
+    csv_save_requested_            = false;
     measure_phase_                 = MeasurePhase::WaitingForTrajectory;
     phase_start_time_              = time;
     measure_start_time_            = time;
     move_to_start_trajectory_      = Trajectory();
-    excitation_trajectory_         = std::make_shared<ExcitationTrajectory>(factory->node_->get_parameter("urdf_path").as_string());
-    auto trajectory                = excitation_trajectory_;
-    const auto logger              = factory->node_->get_logger();
-    const double trajectory_period = trajectory_period_;
-    const int repeat_cnt           = trajectory_repeat_cnt_;
-    trajectory_generate_future_    = std::async(std::launch::async, [this, trajectory, logger, trajectory_period, repeat_cnt]() {
-        try {
-            trajectory->generate(trajectory_period, repeat_cnt);
-        } catch (const std::exception& error) {
-            trajectory_generation_failed_ = true;
-            RCLCPP_WARN(logger, "Failed to generate excitation trajectory: %s", error.what());
-        }
-    });
+    excitation_trajectory_->generate(trajectory_period_, trajectory_repeat_cnt_);
 
     return true;
 }
@@ -491,7 +489,7 @@ std::string ParamterMeasureState::check_switch() const {
 }
 
 bool ParamterMeasureState::run(const rclcpp::Time& time) {
-    if (factory == nullptr || factory->node_ == nullptr || excitation_trajectory_ == nullptr
+    if (factory == nullptr || factory->node_ == nullptr || excitation_trajectory_ == nullptr || paramter_identify_ == nullptr
         || factory->state_.size() != joint_count_ || factory->command_.size() != joint_count_) {
         return false;
     }
@@ -507,19 +505,11 @@ bool ParamterMeasureState::run(const rclcpp::Time& time) {
             command.ki       = 0.0f;
         }
 
-        if (trajectory_generation_failed_) {
+        if (trajectory_generation_failed_ || excitation_trajectory_->generate_failed()) {
             return false;
-        }
-        if (!excitation_trajectory_->generate_is_finished()
-            && (!trajectory_generate_future_.valid()
-                || trajectory_generate_future_.wait_for(std::chrono::seconds(0)) != std::future_status::ready)) {
-            return true;
-        }
-        if (trajectory_generate_future_.valid()) {
-            trajectory_generate_future_.get();
         }
         if (!excitation_trajectory_->generate_is_finished()) {
-            return false;
+            return true;
         }
 
         const auto zero_duration = rclcpp::Duration::from_seconds(0.0);
@@ -588,13 +578,28 @@ bool ParamterMeasureState::run(const rclcpp::Time& time) {
     if (measure_phase_ == MeasurePhase::ExecutingTrajectory) {
         const rclcpp::Duration elapsed = time - measure_start_time_;
         const double total_duration    = trajectory_period_ * static_cast<double>(trajectory_repeat_cnt_);
-        if (elapsed.seconds() >= total_duration) {
+        const bool trajectory_finished = elapsed.seconds() >= total_duration;
+        if (trajectory_finished) {
             target_position_ = excitation_end_position_;
-            measure_done_    = true;
-            measure_phase_   = MeasurePhase::HoldingEnd;
         } else if (!excitation_trajectory_->get_target_position(elapsed, target_position_)
                    || target_position_.size() != static_cast<Eigen::Index>(joint_count_) || !target_position_.allFinite()) {
             return false;
+        }
+
+        for (std::size_t i = 0; i < joint_count_; ++i) {
+            const auto index             = static_cast<Eigen::Index>(i);
+            measured_position_(index)    = factory->state_[i].position;
+            measured_velocity_(index)    = factory->state_[i].velocity;
+            measured_torque_(index)      = factory->state_[i].torque;
+        }
+        paramter_identify_->record_value(measured_position_, measured_velocity_, measured_torque_);
+
+        if (trajectory_finished) {
+            measure_done_  = true;
+            measure_phase_ = MeasurePhase::HoldingEnd;
+            if (!csv_save_requested_) {
+                csv_save_requested_ = paramter_identify_->save_csv(measure_csv_file_path_);
+            }
         }
     } else if (measure_phase_ == MeasurePhase::HoldingEnd) {
         target_position_ = excitation_end_position_;

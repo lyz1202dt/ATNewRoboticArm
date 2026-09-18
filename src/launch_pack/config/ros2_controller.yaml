@@ -41,3 +41,5 @@ arm_controller:
     measure_trajectory_period: 10.0
     measure_move_to_start_duration: 3.0
     measure_trajectory_repeat_cnt: 1
+    measure_csv_file_path: /tmp/measured_for_identification.csv
+    measure_record_sample_rate: 500.0
