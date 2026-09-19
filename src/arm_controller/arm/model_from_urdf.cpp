@@ -44,7 +44,7 @@ bool ModelFromURDF::geometric_jacobian(const Eigen::VectorXd& q, Eigen::MatrixXd
     check_vector_dimension(q);
 
     if (jacobian->rows() != 6 || jacobian->cols() != model_.nv) {
-        jacobian->resize(6, model_.nv);
+        return false;
     }
     pinocchio::computeFrameJacobian(model_, data_, q, end_effector_frame_id_, pinocchio::LOCAL_WORLD_ALIGNED, *jacobian);
     return jacobian->allFinite();
@@ -70,7 +70,7 @@ bool ModelFromURDF::inverse_dynamic(const Eigen::VectorXd& q,
     }
 
     if (joint_torque->size() != model_.nv) {
-        joint_torque->resize(model_.nv);
+        return false;
     }
     *joint_torque = pinocchio::rnea(model_, data_, q, dq, ddq);
     return joint_torque->allFinite();

@@ -6,6 +6,24 @@
 ArmSolve::ArmSolve(std::shared_ptr<ModelBase> model, std::shared_ptr<TaskMapping> task_mapping)
     : model_(model) {
     ik_solver_ = std::make_shared<IKSolver>(model, task_mapping);
+
+    const Eigen::Index joint_count = model_->dof();
+    workspace_.finite_joint_pos.resize(joint_count);
+    workspace_.joint_vel.resize(joint_count);
+    workspace_.jacobian_velocity.resize(6);
+    workspace_.task_acc_rhs.resize(6);
+    workspace_.joint_acc.resize(joint_count);
+    workspace_.task_force_torque.resize(joint_count);
+    workspace_.jacobian.resize(6, joint_count);
+    workspace_.next_jacobian.resize(6, joint_count);
+    workspace_.jacobian_delta.resize(6, joint_count);
+    workspace_.jacobian_transpose.resize(joint_count, 6);
+    workspace_.jacobian.setZero();
+    workspace_.next_jacobian.setZero();
+    workspace_.jacobian_delta.setZero();
+    workspace_.jacobian_transpose.setZero();
+    workspace_.jacobian_solver.compute(workspace_.jacobian);
+    workspace_.static_force_solver.compute(workspace_.jacobian_transpose);
 }
 
 bool ArmSolve::inverse_kinamic(const Eigen::VectorXd& task_pos, Eigen::VectorXd* joint_pos) {
@@ -15,7 +33,7 @@ bool ArmSolve::inverse_kinamic(const Eigen::VectorXd& task_pos, Eigen::VectorXd*
 
     const int joint_count = model_->dof();
     if (joint_pos->size() != joint_count) {
-        joint_pos->resize(joint_count);
+        return false;
     }
     joint_pos->setZero();
     return ik_solver_->solve(task_pos, *joint_pos);
@@ -65,6 +83,9 @@ bool ArmSolve::inverse_dynamic(
         message << "Invalid task force size: expected " << workspace_.jacobian.rows() << ", got " << task_force.size();
         throw std::invalid_argument(message.str());
     }
+    if (joint_torque->size() != joint_count) {
+        throw std::invalid_argument("Invalid joint torque output size");
+    }
     workspace_.jacobian_solver.compute(workspace_.jacobian);
 
     workspace_.joint_vel = workspace_.jacobian_solver.solve(task_vel);
@@ -73,20 +94,16 @@ bool ArmSolve::inverse_dynamic(
     }
 
     // x_ddot = J(q) q_ddot + J_dot(q, q_dot) q_dot.
-    workspace_.finite_joint_pos.resize(joint_count);
     workspace_.finite_joint_pos.noalias() = joint_pos + kJacobianDifferenceStep * workspace_.joint_vel;
     if (!ik_solver_->jacobian(workspace_.finite_joint_pos, &workspace_.next_jacobian)) {
         return false;
     }
 
-    workspace_.jacobian_delta.resize(workspace_.jacobian.rows(), workspace_.jacobian.cols());
     workspace_.jacobian_delta.noalias() = workspace_.next_jacobian - workspace_.jacobian;
     workspace_.jacobian_delta /= kJacobianDifferenceStep;
 
-    workspace_.jacobian_velocity.resize(workspace_.jacobian.rows());
     workspace_.jacobian_velocity.noalias() = workspace_.jacobian_delta * workspace_.joint_vel;
 
-    workspace_.task_acc_rhs.resize(task_acc.size());
     workspace_.task_acc_rhs.noalias() = task_acc - workspace_.jacobian_velocity;
     workspace_.joint_acc = workspace_.jacobian_solver.solve(workspace_.task_acc_rhs);
     if (!workspace_.joint_acc.allFinite()) {
@@ -97,10 +114,41 @@ bool ArmSolve::inverse_dynamic(
         return false;
     }
 
-    workspace_.task_force_torque.resize(joint_count);
     workspace_.task_force_torque.noalias() = workspace_.jacobian.transpose() * task_force;
     *joint_torque += workspace_.task_force_torque;
     return joint_torque->allFinite();
+}
+
+bool ArmSolve::inverse_velocity(
+    const Eigen::VectorXd& joint_pos, const Eigen::VectorXd& task_vel, Eigen::VectorXd* joint_vel) {
+    if (joint_vel == nullptr) {
+        return false;
+    }
+
+    const int joint_count = model_->dof();
+    if (joint_pos.size() != joint_count) {
+        throw std::invalid_argument("Invalid joint position size");
+    }
+    if (!joint_pos.allFinite()) {
+        throw std::invalid_argument("Joint position contains non-finite values");
+    }
+    if (!ik_solver_->jacobian(joint_pos, &workspace_.jacobian)) {
+        return false;
+    }
+    if (task_vel.size() != workspace_.jacobian.rows()) {
+        throw std::invalid_argument("Invalid task velocity size");
+    }
+
+    workspace_.jacobian_solver.compute(workspace_.jacobian);
+    workspace_.joint_vel.noalias() = workspace_.jacobian_solver.solve(task_vel);
+    if (!workspace_.joint_vel.allFinite()) {
+        return false;
+    }
+    if (joint_vel->size() != joint_count) {
+        return false;
+    }
+    *joint_vel = workspace_.joint_vel;
+    return true;
 }
 
 bool ArmSolve::static_force(const Eigen::VectorXd& joint_pos,
@@ -119,12 +167,14 @@ bool ArmSolve::static_force(const Eigen::VectorXd& joint_pos,
         message << "Invalid joint torque residual size: expected " << joint_count << ", got " << joint_torque_residual.size();
         throw std::invalid_argument(message.str());
     }
+    if (task_force->size() != 6) {
+        throw std::invalid_argument("Invalid task force output size");
+    }
 
     if (!ik_solver_->jacobian(joint_pos, &workspace_.jacobian)) {
         return false;
     }
 
-    workspace_.jacobian_transpose.resize(workspace_.jacobian.cols(), workspace_.jacobian.rows());
     workspace_.jacobian_transpose.noalias() = workspace_.jacobian.transpose();
     workspace_.static_force_solver.compute(workspace_.jacobian_transpose);
     *task_force = workspace_.static_force_solver.solve(joint_torque_residual);

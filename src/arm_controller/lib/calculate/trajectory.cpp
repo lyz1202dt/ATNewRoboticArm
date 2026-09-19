@@ -134,14 +134,8 @@ void Trajectory::sample_segment(const Point& a, const Point& b, double s, Point*
     const double y2 = 3.0 * u2 * v; // 3u^2(1-u)
     const double y3 = u3;           // u^3
 
-    if (out->pos.size() != dimension) {
-        out->pos.resize(dimension);
-    }
-    if (out->vel.size() != dimension) {
-        out->vel.resize(dimension);
-    }
-    if (out->acc.size() != dimension) {
-        out->acc.resize(dimension);
+    if (out->pos.size() != dimension || out->vel.size() != dimension || out->acc.size() != dimension) {
+        return;
     }
 
     const bool has_a_vel = a.vel.size() == dimension;

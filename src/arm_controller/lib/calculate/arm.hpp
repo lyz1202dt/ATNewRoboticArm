@@ -21,6 +21,11 @@ public:
                          const Eigen::VectorXd& task_force,
                          Eigen::VectorXd* joint_torque);
 
+    // 将任务空间速度映射到关节空间速度，复用预分配的雅可比求解器。
+    bool inverse_velocity(const Eigen::VectorXd& joint_pos,
+                          const Eigen::VectorXd& task_vel,
+                          Eigen::VectorXd* joint_vel);
+
     // 根据关节力矩残差计算用户定义任务空间受力。
     bool static_force(const Eigen::VectorXd& joint_pos,
                       const Eigen::VectorXd& joint_torque_residual,

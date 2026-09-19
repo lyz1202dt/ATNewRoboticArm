@@ -15,7 +15,7 @@ bool Default6DofTaskSpaceMapping::position_map(const Eigen::VectorXd& joint_pos,
     }
 
     if (task_position->size() != 6) {
-        task_position->resize(6);
+        return false;
     }
     task_position->head<3>() = pose.translation();
 
@@ -38,7 +38,7 @@ bool Default6DofTaskSpaceMapping::jacobian_map(const Eigen::VectorXd& joint_pos,
     }
 
     if (task_jacobian->rows() != jacobian.rows() || task_jacobian->cols() != jacobian.cols()) {
-        task_jacobian->resize(jacobian.rows(), jacobian.cols());
+        return false;
     }
     task_jacobian->noalias() = jacobian;
     return task_jacobian->allFinite();

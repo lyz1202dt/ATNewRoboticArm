@@ -18,6 +18,7 @@
 #include "trajectory.hpp"
 
 class FSMArmControlFactory;
+struct ArmCommandBuffer;
 
 
 class IDELState : public FSM {
@@ -131,6 +132,28 @@ public:
     bool exit(const std::string& next_state) override;
     std::string check_switch() const override;
     bool run(const rclcpp::Time& time) override;
+
+private:
+    bool read_servo_velocity(const ArmCommandBuffer& cmd);
+
+    FSMArmControlFactory* factory{nullptr};
+    std::size_t joint_count_{0};
+    std::size_t task_dof_{6};
+    bool command_active_{false};
+    rclcpp::Time last_update_time_;
+    rclcpp::Time command_end_time_;
+    Eigen::VectorXd joint_pos_;
+    Eigen::VectorXd joint_velocity_;
+    Eigen::VectorXd task_position_;
+    Eigen::VectorXd desired_task_position_;
+    Eigen::VectorXd desired_task_velocity_;
+    Eigen::VectorXd desired_task_acceleration_;
+    Eigen::VectorXd task_force_;
+    Eigen::VectorXd torque_;
+    std::vector<float> default_kp_;
+    std::vector<float> default_kd_;
+    std::vector<double> default_kp_param_;
+    std::vector<double> default_kd_param_;
 };
 
 class AdmittanceState : public FSM {
@@ -141,6 +164,38 @@ public:
     bool exit(const std::string& next_state) override;
     std::string check_switch() const override;
     bool run(const rclcpp::Time& time) override;
+
+private:
+    void load_admittance_parameters(const char* name, const Eigen::VectorXd& fallback, Eigen::VectorXd& destination);
+
+    FSMArmControlFactory* factory{nullptr};
+    std::size_t joint_count_{0};
+    std::size_t task_dof_{6};
+    bool trajectory_active_{false};
+    rclcpp::Time traj_start_time_;
+    rclcpp::Time last_update_time_;
+    Trajectory traj;
+    Point point;
+    Eigen::VectorXd joint_pos_;
+    Eigen::VectorXd joint_velocity_;
+    Eigen::VectorXd joint_acceleration_;
+    Eigen::VectorXd model_torque_;
+    Eigen::VectorXd torque_residual_;
+    Eigen::VectorXd task_force_;
+    Eigen::VectorXd task_position_;
+    Eigen::VectorXd desired_task_position_;
+    Eigen::VectorXd desired_task_velocity_;
+    Eigen::VectorXd desired_task_acceleration_;
+    Eigen::VectorXd position_error_;
+    Eigen::VectorXd velocity_error_;
+    Eigen::VectorXd torque_;
+    Eigen::VectorXd admittance_mass_;
+    Eigen::VectorXd admittance_damping_;
+    Eigen::VectorXd admittance_stiffness_;
+    std::vector<float> default_kp_;
+    std::vector<float> default_kd_;
+    std::vector<double> default_kp_param_;
+    std::vector<double> default_kd_param_;
 };
 
 class TeachPendantState : public FSM {

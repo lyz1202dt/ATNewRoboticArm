@@ -34,6 +34,9 @@ controller_interface::CallbackReturn ArmController::on_init() {
     auto_declare<int>("measure_trajectory_repeat_cnt", 1);
     auto_declare<std::string>("measure_csv_file_path", "/tmp/measured_for_identification.csv");
     auto_declare<double>("measure_record_sample_rate", 500.0);
+    auto_declare<std::vector<double>>("admittance_mass", {1.0, 1.0, 1.0, 0.1, 0.1, 0.1});
+    auto_declare<std::vector<double>>("admittance_damping", {20.0, 20.0, 20.0, 2.0, 2.0, 2.0});
+    auto_declare<std::vector<double>>("admittance_stiffness", {0.0, 0.0, 0.0, 0.0, 0.0, 0.0});
     auto_declare<double>("measure_end_effector_x_lower_limit", -std::numeric_limits<double>::infinity());
     auto_declare<double>("measure_end_effector_x_upper_limit", std::numeric_limits<double>::infinity());
     auto_declare<double>("measure_end_effector_y_lower_limit", -std::numeric_limits<double>::infinity());
@@ -83,6 +86,22 @@ controller_interface::CallbackReturn ArmController::on_init() {
                     result.successful = false;
                     result.reason     = name + " size must be less than or equal to joints size";
                     return result;
+                }
+            } else if (
+                name == "admittance_mass" || name == "admittance_damping" || name == "admittance_stiffness") {
+                const auto values = param.as_double_array();
+                if (values.size() > 6) {
+                    result.successful = false;
+                    result.reason     = name + " size must be less than or equal to 6";
+                    return result;
+                }
+                for (const double value : values) {
+                    if (!std::isfinite(value) || (name == "admittance_mass" && value <= 0.0)
+                        || (name != "admittance_mass" && value < 0.0)) {
+                        result.successful = false;
+                        result.reason     = name + " contains an invalid value";
+                        return result;
+                    }
                 }
             } else if (name == "reset_duration") {
                 if (param.as_double() <= 0.0) {
