@@ -1,4 +1,3 @@
-float32 position
-float32 velocity
-float32 acceleration
-float32 force
+Vector velocity
+Vector acceleration
+Vector force

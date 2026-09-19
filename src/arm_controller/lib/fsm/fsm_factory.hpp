@@ -12,6 +12,11 @@
 
 class FSMFactory {
 public:
+    FSMFactory() {
+        current_state_name_.reserve(32);
+        next_state_name_.reserve(32);
+    }
+
     bool register_fsm(std::unique_ptr<FSM> fsm) {
         if (fsm == nullptr) {
             return false;
@@ -58,8 +63,8 @@ public:
             bool success = current_fsm.run(time);
             if (!success)
                 return false;
-            const std::string next_state = current_fsm.check_switch();
-            if(next_state!=current_fsm.get_name())
+            const std::string& next_state = current_fsm.check_switch();
+            if(next_state != current_fsm.get_name())
             {
                 const auto state = fsm_map.find(next_state);
                 if (state == fsm_map.end() || state->second == nullptr) {

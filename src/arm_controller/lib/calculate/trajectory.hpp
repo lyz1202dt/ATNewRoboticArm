@@ -38,6 +38,7 @@ class Trajectory {
 public:
     Trajectory(int dof,int max_point_num);
     bool add_point(const Point& point, rclcpp::Duration time_from_start);
+    bool add_point(const std::vector<float> &pos,const std::vector<float> &vel,const std::vector<float> &acc,const rclcpp::Duration &time_from_start);
 
     void start(rclcpp::Time time);
     void stop();

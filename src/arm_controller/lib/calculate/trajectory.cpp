@@ -29,6 +29,31 @@ bool Trajectory::add_point(const Point& point, rclcpp::Duration time_from_start)
     return true;
 }
 
+bool Trajectory::add_point(
+    const std::vector<float>& pos, const std::vector<float>& vel, const std::vector<float>& acc,
+    const rclcpp::Duration& time_from_start) {
+    if (points.empty() || pos.size() != static_cast<std::size_t>(points.front().pos.size())
+        || (!vel.empty() && vel.size() != pos.size()) || (!acc.empty() && acc.size() != pos.size())) {
+        return false;
+    }
+
+    if (copy.pos.size() != static_cast<Eigen::Index>(pos.size())
+        || copy.vel.size() != static_cast<Eigen::Index>(pos.size())
+        || copy.acc.size() != static_cast<Eigen::Index>(pos.size())) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < pos.size(); ++i) {
+        const auto index = static_cast<Eigen::Index>(i);
+        copy.pos(index) = pos[i];
+        copy.vel(index) = vel.empty() ? 0.0 : vel[i];
+        copy.acc(index) = acc.empty() ? 0.0 : acc[i];
+    }
+    copy.time = time_from_start;
+    return add_point(copy, time_from_start);
+}
+
+
 void Trajectory::start(rclcpp::Time time) {
     start_time_point_ = time;
     started_          = true;

@@ -11,11 +11,14 @@
 #include <vector>
 
 #include <Eigen/Dense>
+#include <rclcpp/rclcpp.hpp>
 #include <rclcpp/time.hpp>
 
 #include "excitation_trajectory.hpp"
 #include "paramter_identify.hpp"
 #include "trajectory.hpp"
+
+#include <robot_msgs/msg/joint_traj_cmd.hpp>
 
 class FSMArmControlFactory;
 struct ArmCommandBuffer;
@@ -108,7 +111,7 @@ public:
     
     bool enter(const std::string& last_state, const rclcpp::Time& time) override;
     bool exit(const std::string& next_state) override;
-    std::string check_switch() const override;
+    std::string& check_switch() const override;
     bool run(const rclcpp::Time& time) override;
 private:
     Point point;
@@ -118,10 +121,10 @@ private:
     Eigen::VectorXd torque;
     std::vector<float> default_kp_;
     std::vector<float> default_kd_;
-    std::vector<double> default_kp_param_;
-    std::vector<double> default_kd_param_;
     std::size_t joint_count_{0};
     FSMArmControlFactory* factory{nullptr};
+
+    rclcpp::Subscription<robot_msgs::msg::JointTrajCmd>::SharedPtr joint_trajectory_cmd_sub_;
 };
 
 class ServoState : public FSM {

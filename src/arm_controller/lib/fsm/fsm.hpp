@@ -28,7 +28,7 @@ public:
         return true;
     }
 
-    virtual std::string check_switch() const {
+    virtual const std::string& check_switch() const {
         return fsm_name_;
     }
 
