@@ -18,10 +18,12 @@
 #include "paramter_identify.hpp"
 #include "trajectory.hpp"
 
+#include <robot_msgs/msg/admittance_cmd.hpp>
+#include <robot_msgs/msg/cart_traj_cmd.hpp>
 #include <robot_msgs/msg/joint_traj_cmd.hpp>
+#include <robot_msgs/msg/servo_ctrl_cmd.hpp>
 
 class FSMArmControlFactory;
-struct ArmCommandBuffer;
 
 
 class IDELState : public FSM {
@@ -30,7 +32,7 @@ public:
 
     bool enter(const std::string& last_state, const rclcpp::Time& time) override;
     bool exit(const std::string& next_state) override;
-    std::string check_switch() const override;
+    const std::string& check_switch() const override;
     bool run(const rclcpp::Time& time) override;
 
 private:
@@ -49,7 +51,7 @@ public:
 
     bool enter(const std::string& last_state, const rclcpp::Time& time) override;
     bool exit(const std::string& next_state) override;
-    std::string check_switch() const override;
+    const std::string& check_switch() const override;
     bool run(const rclcpp::Time& time) override;
 private:
     FSMArmControlFactory* factory{nullptr};
@@ -79,7 +81,7 @@ public:
 
     bool enter(const std::string& last_state, const rclcpp::Time& time) override;
     bool exit(const std::string& next_state) override;
-    std::string check_switch() const override;
+    const std::string& check_switch() const override;
     bool run(const rclcpp::Time& time) override;
 
 private:
@@ -97,6 +99,8 @@ private:
     std::size_t joint_count_{0};
     std::size_t task_dof_{6};
     FSMArmControlFactory* factory{nullptr};
+
+    rclcpp::Subscription<robot_msgs::msg::CartTrajCmd>::SharedPtr cart_traj_cmd_sub_;
 };
 
 class JointTrajState : public FSM {
@@ -111,7 +115,7 @@ public:
     
     bool enter(const std::string& last_state, const rclcpp::Time& time) override;
     bool exit(const std::string& next_state) override;
-    std::string& check_switch() const override;
+    const std::string& check_switch() const override;
     bool run(const rclcpp::Time& time) override;
 private:
     Point point;
@@ -121,6 +125,8 @@ private:
     Eigen::VectorXd torque;
     std::vector<float> default_kp_;
     std::vector<float> default_kd_;
+    std::vector<double> default_kp_param_;
+    std::vector<double> default_kd_param_;
     std::size_t joint_count_{0};
     FSMArmControlFactory* factory{nullptr};
 
@@ -133,18 +139,14 @@ public:
 
     bool enter(const std::string& last_state, const rclcpp::Time& time) override;
     bool exit(const std::string& next_state) override;
-    std::string check_switch() const override;
+    const std::string& check_switch() const override;
     bool run(const rclcpp::Time& time) override;
 
 private:
-    bool read_servo_velocity(const ArmCommandBuffer& cmd);
-
     FSMArmControlFactory* factory{nullptr};
     std::size_t joint_count_{0};
     std::size_t task_dof_{6};
-    bool command_active_{false};
     rclcpp::Time last_update_time_;
-    rclcpp::Time command_end_time_;
     Eigen::VectorXd joint_pos_;
     Eigen::VectorXd joint_velocity_;
     Eigen::VectorXd task_position_;
@@ -157,6 +159,8 @@ private:
     std::vector<float> default_kd_;
     std::vector<double> default_kp_param_;
     std::vector<double> default_kd_param_;
+
+    rclcpp::Subscription<robot_msgs::msg::ServoCtrlCmd>::SharedPtr servo_ctrl_cmd_sub_;
 };
 
 class AdmittanceState : public FSM {
@@ -165,7 +169,7 @@ public:
 
     bool enter(const std::string& last_state, const rclcpp::Time& time) override;
     bool exit(const std::string& next_state) override;
-    std::string check_switch() const override;
+    const std::string& check_switch() const override;
     bool run(const rclcpp::Time& time) override;
 
 private:
@@ -199,6 +203,8 @@ private:
     std::vector<float> default_kd_;
     std::vector<double> default_kp_param_;
     std::vector<double> default_kd_param_;
+
+    rclcpp::Subscription<robot_msgs::msg::AdmittanceCmd>::SharedPtr admittance_cmd_sub_;
 };
 
 class TeachPendantState : public FSM {
@@ -207,7 +213,7 @@ public:
 
     bool enter(const std::string& last_state, const rclcpp::Time& time) override;
     bool exit(const std::string& next_state) override;
-    std::string check_switch() const override;
+    const std::string& check_switch() const override;
     bool run(const rclcpp::Time& time) override;
 
 private:
@@ -227,7 +233,7 @@ public:
 
     bool enter(const std::string& last_state, const rclcpp::Time& time) override;
     bool exit(const std::string& next_state) override;
-    std::string check_switch() const override;
+    const std::string& check_switch() const override;
     bool run(const rclcpp::Time& time) override;
 
 private:
